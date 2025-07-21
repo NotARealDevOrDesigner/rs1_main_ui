@@ -35,6 +35,13 @@ config.h - Hardware Configuration & System Constants
 #define DYNAMIC_TEXT_UPDATE_INTERVAL 10000
 
 // =============================================================================
+// LOADING SCREEN CONFIGURATION
+// =============================================================================
+#define LOADING_SCREEN_ENABLED    true      // Set to false to skip loading screen for debugging
+#define LOADING_DURATION_MS       7000      // 3 seconds loading time
+#define LOADING_SPINNER_SPEED     200       // Animation speed in ms
+
+// =============================================================================
 // COLOR PALETTE
 // =============================================================================
 #define COLOR_BG_MAIN         0xF4F4F4
@@ -42,6 +49,7 @@ config.h - Hardware Configuration & System Constants
 #define COLOR_BG_DETAIL       0xF4F4F4
 #define COLOR_BG_HEADER       0xF4F4F4
 #define COLOR_BG_DETAIL_HEADER 0xF4F4F4
+#define COLOR_BG_LOADING      0x1E1E1E    // Dark background for loading screen
 
 #define COLOR_BTN_PRIMARY     0x1E1E1E
 #define COLOR_BTN_SECONDARY   0xE0E0E0
@@ -52,6 +60,7 @@ config.h - Hardware Configuration & System Constants
 #define COLOR_TEXT_PRIMARY    0x1E1E1E
 #define COLOR_TEXT_SECONDARY  0xF4F4F4
 #define COLOR_TEXT_DARK       0x2E3440
+#define COLOR_TEXT_LOADING    0xF4F4F4   // Light text for loading screen
 
 #define COLOR_DOT_ACTIVE      0x1E1E1E
 #define COLOR_DOT_INACTIVE    0xE0E0E0
@@ -60,6 +69,9 @@ config.h - Hardware Configuration & System Constants
 #define COLOR_POPUP_BORDER    0x5E81AC
 
 #define COLOR_BATTERY_LOAD    0x1E1E1E
+
+#define COLOR_LOADING_SPINNER 0x5E81AC   // Blue spinner color
+#define COLOR_LOADING_ACCENT  0xD08770   // Orange accent color
 
 // =============================================================================
 // DEBUG SETTINGS

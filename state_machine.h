@@ -14,6 +14,7 @@ state_machine.h - State Management System
 // STATE DEFINITIONS
 // =============================================================================
 enum AppState {
+  STATE_LOADING,    // New loading screen state
   STATE_MAIN,
   STATE_TIMER,
   STATE_TLAPSE, 
@@ -49,6 +50,7 @@ struct AppStateData {
   int current_option;
   bool is_animating;
   String dynamic_text;
+  unsigned long loading_start_time;  // Track when loading started
 };
 
 // =============================================================================
@@ -65,6 +67,11 @@ extern PageContent interval_content;
 void state_machine_init();
 void change_state(AppState new_state);
 void go_back();
+void check_loading_timeout();  // New function to check if loading should end
+
+// Navigation hierarchy functions
+AppState get_parent_state(AppState current_state);
+bool is_main_template_state(AppState state);
 
 // =============================================================================
 // DATA MANAGEMENT FUNCTIONS
@@ -78,23 +85,39 @@ DetailContext get_detail_context();
 // STATE MACHINE IMPLEMENTATION
 // =============================================================================
 
-// Global state instance
-AppStateData app_state = {STATE_MAIN, STATE_MAIN, DETAIL_TIMER_OPTION1, 0, false, "Default Text"};
+// Global state instance - Start with loading screen if enabled
+AppStateData app_state = {
+  LOADING_SCREEN_ENABLED ? STATE_LOADING : STATE_MAIN, 
+  STATE_LOADING, 
+  DETAIL_TIMER_OPTION1, 
+  0, 
+  false, 
+  "Loading...", 
+  0
+};
 
 // Content data
-PageContent timer_content = {"Timer", "Quick Timer", "Custom Timer", "05:00", "00:00"};
-PageContent tlapse_content = {"Timelapse", "Standard", "Advanced", "02:00", "04:00"};
-PageContent interval_content = {"Interval", "Short Burst", "Long Burst", "00:30", "01:00"};
+PageContent timer_content = {"Timer", "Delay", "Release", "05:00", "00:00"};
+PageContent tlapse_content = {"Timelapse", "Total", "Frames", "02:00", "04:00"};
+PageContent interval_content = {"Interval", "Interval", "-", "00:30", "01:00"};
 
 // Forward declaration for UI
 void show_current_page();
 
 void state_machine_init() {
-  app_state.current_state = STATE_MAIN;
-  app_state.previous_state = STATE_MAIN;
+  if (LOADING_SCREEN_ENABLED) {
+    app_state.current_state = STATE_LOADING;
+    app_state.loading_start_time = millis();
+    DEBUG_PRINTLN("Starting with loading screen for " + String(LOADING_DURATION_MS) + "ms");
+  } else {
+    app_state.current_state = STATE_MAIN;
+    DEBUG_PRINTLN("Loading screen disabled - starting with main page");
+  }
+  
+  app_state.previous_state = STATE_LOADING;
   app_state.current_option = 0;
   app_state.is_animating = false;
-  app_state.dynamic_text = "Welcome to Camera Control";
+  app_state.dynamic_text = LOADING_SCREEN_ENABLED ? "Loading..." : "Welcome to Camera Control";
   
   DEBUG_PRINTLN("State machine initialized");
 }
@@ -106,8 +129,59 @@ void change_state(AppState new_state) {
 }
 
 void go_back() {
-  change_state(app_state.previous_state);
+  // Smart navigation: understand the page hierarchy
+  AppState target_state = get_parent_state(app_state.current_state);
+  
+  DEBUG_PRINTF("Smart back: %d -> %d\n", app_state.current_state, target_state);
+  
+  change_state(target_state);
   show_current_page();
+}
+
+// Get the logical parent state for proper back navigation
+AppState get_parent_state(AppState current_state) {
+  switch (current_state) {
+    case STATE_LOADING:
+      return STATE_MAIN;  // Loading should always go to main
+      
+    case STATE_DETAIL:
+      // Detail pages go back to their template page
+      // Use the previous state if it's a template page, otherwise go to main
+      if (is_main_template_state(app_state.previous_state)) {
+        return app_state.previous_state;
+      } else {
+        return STATE_MAIN;  // Fallback to main if previous state is unclear
+      }
+      
+    case STATE_TIMER:
+    case STATE_TLAPSE:
+    case STATE_INTERVAL:
+      // Template pages always go back to main
+      return STATE_MAIN;
+      
+    case STATE_SETTINGS:
+      return STATE_MAIN;
+      
+    case STATE_MAIN:
+    default:
+      return STATE_MAIN;  // Main page stays at main
+  }
+}
+
+// Check if a state is one of the main template states
+bool is_main_template_state(AppState state) {
+  return (state == STATE_TIMER || state == STATE_TLAPSE || state == STATE_INTERVAL);
+}
+
+void check_loading_timeout() {
+  if (app_state.current_state == STATE_LOADING && LOADING_SCREEN_ENABLED) {
+    unsigned long elapsed = millis() - app_state.loading_start_time;
+    if (elapsed >= LOADING_DURATION_MS) {
+      DEBUG_PRINTLN("Loading complete - transitioning to main page");
+      change_state(STATE_MAIN);
+      show_current_page();
+    }
+  }
 }
 
 void update_dynamic_text(String new_text) {

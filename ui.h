@@ -1,6 +1,6 @@
 /*
 =============================================================================
-ui.h - Clean User Interface System with Battery Header
+ui.h - Clean User Interface System with Loading Screen & Battery Header
 =============================================================================
 */
 
@@ -26,6 +26,17 @@ struct MainCard {
 // =============================================================================
 #ifndef UI_GLOBALS_DEFINED
 #define UI_GLOBALS_DEFINED
+
+// Loading screen objects
+lv_obj_t *loading_page;
+lv_obj_t *loading_spinner;
+lv_obj_t *loading_title;
+lv_obj_t *loading_subtitle;
+lv_obj_t *loading_progress_dots[3];
+lv_timer_t *loading_spinner_timer;
+lv_timer_t *loading_dots_timer;
+int loading_spinner_angle = 0;
+int loading_current_dot = 0;
 
 // Main page card data - mit verbesserten Icons
 MainCard main_cards[4] = {
@@ -82,13 +93,19 @@ void ui_init();
 void show_current_page();
 
 // Page creation functions
+void create_loading_page();        // New loading page function
 void create_main_page();
 void create_template_page();
 void create_detail_page();
 void create_popup();
 
+// Loading screen functions
+void loading_spinner_timer_cb(lv_timer_t *timer);
+//void loading_dots_timer_cb(lv_timer_t *timer);
+void cleanup_loading_screen();
+
 // Header management functions
-lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back_btn);
+lv_obj_t* create_page_header(lv_obj_t *parent,const char* title, bool show_back_btn);
 void update_all_battery_widgets();
 
 // Page management functions
@@ -120,6 +137,127 @@ void detail_back_cb(lv_event_t *e);
 void popup_close_cb(lv_event_t *e);
 
 // =============================================================================
+// LOADING SCREEN FUNCTIONS
+// =============================================================================
+
+// Loading screen spinner animation callback
+void loading_spinner_timer_cb(lv_timer_t *timer) {
+  loading_spinner_angle += 30;
+  if (loading_spinner_angle >= 360) {
+    loading_spinner_angle = 0;
+  }
+  
+  if (loading_spinner) {
+    lv_img_set_angle(loading_spinner, loading_spinner_angle * 10); // LVGL uses 0.1 degree units
+  }
+}
+
+// Loading screen dots animation callback
+void loading_dots_timer_cb(lv_timer_t *timer) {
+  // Reset all dots to inactive
+  for (int i = 0; i < 3; i++) {
+    if (loading_progress_dots[i]) {
+      lv_obj_set_style_bg_color(loading_progress_dots[i], lv_color_hex(COLOR_DOT_INACTIVE), 0);
+    }
+  }
+  
+  // Activate current dot
+  if (loading_progress_dots[loading_current_dot]) {
+    lv_obj_set_style_bg_color(loading_progress_dots[loading_current_dot], lv_color_hex(COLOR_LOADING_SPINNER), 0);
+  }
+  
+  loading_current_dot = (loading_current_dot + 1) % 3;
+}
+
+void cleanup_loading_screen() {
+  if (loading_spinner_timer) {
+    lv_timer_del(loading_spinner_timer);
+    loading_spinner_timer = NULL;
+  }
+  if (loading_dots_timer) {
+    lv_timer_del(loading_dots_timer);
+    loading_dots_timer = NULL;
+  }
+}
+
+void create_loading_page() {
+  loading_page = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(loading_page, lv_pct(100), lv_pct(100));
+  lv_obj_set_style_bg_color(loading_page, lv_color_hex(COLOR_BG_LOADING), 0);
+  lv_obj_set_style_border_width(loading_page, 0, 0);
+  lv_obj_set_style_pad_all(loading_page, 0, 0);
+  lv_obj_set_scrollbar_mode(loading_page, LV_SCROLLBAR_MODE_OFF);
+  lv_obj_clear_flag(loading_page, LV_OBJ_FLAG_SCROLLABLE);
+
+  // Main title - RS1
+  loading_title = lv_label_create(loading_page);
+  lv_label_set_text(loading_title, "RS1");
+  lv_obj_set_style_text_font(loading_title, &lv_font_montserrat_48, 0);
+  lv_obj_set_style_text_color(loading_title, lv_color_hex(COLOR_TEXT_LOADING), 0);
+  lv_obj_align(loading_title, LV_ALIGN_CENTER, 0, -60);
+
+  /*
+  // Subtitle
+  loading_subtitle = lv_label_create(loading_page);
+  lv_label_set_text(loading_subtitle, "Camera Control System");
+  lv_obj_set_style_text_font(loading_subtitle, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(loading_subtitle, lv_color_hex(COLOR_LOADING_ACCENT), 0);
+  lv_obj_align(loading_subtitle, LV_ALIGN_CENTER, 0, -10);
+  */
+
+
+  /*
+  // Spinner (simple circle that rotates)
+  loading_spinner = lv_obj_create(loading_page);
+  lv_obj_set_size(loading_spinner, 40, 40);
+  lv_obj_align(loading_spinner, LV_ALIGN_CENTER, 0, 30);
+  lv_obj_set_style_bg_opa(loading_spinner, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(loading_spinner, 3, 0);
+  lv_obj_set_style_border_color(loading_spinner, lv_color_hex(COLOR_LOADING_SPINNER), 0);
+  lv_obj_set_style_border_opa(loading_spinner, LV_OPA_30, 0);
+  lv_obj_set_style_radius(loading_spinner, LV_RADIUS_CIRCLE, 0);
+  
+  // Add a bright segment to the circle for spinning effect
+  lv_obj_t *spinner_segment = lv_obj_create(loading_spinner);
+  lv_obj_set_size(spinner_segment, 8, 8);
+  lv_obj_align(spinner_segment, LV_ALIGN_TOP_MID, 0, -4);
+  lv_obj_set_style_bg_color(spinner_segment, lv_color_hex(COLOR_LOADING_SPINNER), 0);
+  lv_obj_set_style_border_width(spinner_segment, 0, 0);
+  lv_obj_set_style_radius(spinner_segment, LV_RADIUS_CIRCLE, 0);
+  */
+  /*
+  // Progress dots
+  lv_obj_t *dots_container = lv_obj_create(loading_page);
+  lv_obj_set_size(dots_container, 60, 20);
+  lv_obj_align(dots_container, LV_ALIGN_CENTER, 0, 80);
+  lv_obj_set_style_bg_opa(dots_container, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_border_width(dots_container, 0, 0);
+  lv_obj_set_style_pad_all(dots_container, 0, 0);
+
+  for (int i = 0; i < 3; i++) {
+    loading_progress_dots[i] = lv_obj_create(dots_container);
+    lv_obj_set_size(loading_progress_dots[i], 6, 6);
+    lv_obj_set_pos(loading_progress_dots[i], 15 + i * 15, 7);
+    lv_obj_set_style_bg_color(loading_progress_dots[i], lv_color_hex(COLOR_DOT_INACTIVE), 0);
+    lv_obj_set_style_border_width(loading_progress_dots[i], 0, 0);
+    lv_obj_set_style_radius(loading_progress_dots[i], LV_RADIUS_CIRCLE, 0);
+  }
+  */
+  // Version/Status text at bottom
+  lv_obj_t *version_label = lv_label_create(loading_page);
+  lv_label_set_text(version_label, "v1.0 - Initializing...");
+  lv_obj_set_style_text_font(version_label, &lv_font_montserrat_12, 0);
+  lv_obj_set_style_text_color(version_label, lv_color_hex(0x808080), 0);
+  lv_obj_align(version_label, LV_ALIGN_BOTTOM_MID, 0, -10);
+
+  // Start animations
+  loading_spinner_timer = lv_timer_create(loading_spinner_timer_cb, LOADING_SPINNER_SPEED, NULL);
+  loading_dots_timer = lv_timer_create(loading_dots_timer_cb, 500, NULL); // Slower dot animation
+
+  DEBUG_PRINTLN("Loading screen created with animations");
+}
+
+// =============================================================================
 // HEADER MANAGEMENT FUNCTIONS
 // =============================================================================
 
@@ -128,7 +266,7 @@ lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back
   // Header Container
   lv_obj_t *header = lv_obj_create(parent);
   lv_obj_set_size(header, lv_pct(100), 50);
-  lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
+  lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 8);
   lv_obj_set_style_bg_color(header, lv_color_hex(COLOR_BG_HEADER), 0);
   lv_obj_set_style_border_width(header, 0, 0);
   lv_obj_set_style_pad_all(header, 0, 0);
@@ -150,19 +288,22 @@ lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back
     
     lv_obj_t *back_label = lv_label_create(back_btn);
     lv_label_set_text(back_label, "Back");
-    lv_obj_set_style_text_color(back_label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(back_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
     lv_obj_center(back_label);
   }
-
+  //*
+  
   // Title Label (zentriert)
   lv_obj_t *title_label = lv_label_create(header);
   lv_label_set_text(title_label, title);
   lv_obj_set_style_text_font(title_label, &lv_font_montserrat_16, 0);
   lv_obj_set_style_text_color(title_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
   lv_obj_align(title_label, LV_ALIGN_CENTER, 0, 0);
-
+  //*
+  
   // Battery Widget (oben rechts)
-  lv_obj_t *battery_widget = create_battery_widget(header, 118, 10); // Position für 172px breites Display
+  lv_obj_t *battery_widget = create_battery_widget(header, 118, 12); // Position für 172px breites Display
   
   return header;
 }
@@ -585,12 +726,12 @@ void create_template_page() {
   // Header mit Battery (Template wird dynamisch gesetzt)
   lv_obj_t *template_header = create_page_header(template_page, "Template", true);
   template_header_label = lv_obj_get_child(template_header, 1); // Title label ist das 2. Child
-  template_battery_widget = lv_obj_get_child(template_header, 2); // Battery widget ist das 3. Child
+  template_battery_widget = lv_obj_get_child(template_header, 1); // Battery widget ist das 3. Child
 
   // Button container für swipe functionality
   template_button_container = lv_obj_create(template_page);
-  lv_obj_set_size(template_button_container, 150, 100);
-  lv_obj_align(template_button_container, LV_ALIGN_CENTER, 0, -10);
+  lv_obj_set_size(template_button_container, 150, 158);
+  lv_obj_align(template_button_container, LV_ALIGN_TOP_LEFT, 11, 60);
   lv_obj_set_style_bg_opa(template_button_container, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(template_button_container, 0, 0);
   lv_obj_set_style_pad_all(template_button_container, 0, 0);
@@ -598,50 +739,58 @@ void create_template_page() {
 
   // Option buttons
   template_option1_btn = lv_btn_create(template_button_container);
-  lv_obj_set_size(template_option1_btn, 140, 80);
-  lv_obj_set_pos(template_option1_btn, 5, 10);
-  lv_obj_set_style_bg_color(template_option1_btn, lv_color_hex(COLOR_BTN_PRIMARY), 0);
+  lv_obj_set_size(template_option1_btn, 142, 146);
+  lv_obj_set_pos(template_option1_btn, 0, 5);
+  lv_obj_set_style_bg_color(template_option1_btn, lv_color_hex(COLOR_BTN_SECONDARY), 0);
   lv_obj_set_style_radius(template_option1_btn, 8, 0);
   lv_obj_add_event_cb(template_option1_btn, template_option1_cb, LV_EVENT_CLICKED, NULL);
+  lv_obj_clear_flag(template_option1_btn, LV_OBJ_FLAG_SCROLLABLE);
+
 
   lv_obj_t *option1_container = lv_obj_create(template_option1_btn);
-  lv_obj_set_size(option1_container, lv_pct(90), lv_pct(90));
+  lv_obj_set_size(option1_container, lv_pct(100), lv_pct(100));
   lv_obj_center(option1_container);
   lv_obj_set_style_bg_opa(option1_container, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(option1_container, 0, 0);
+  lv_obj_clear_flag(option1_container, LV_OBJ_FLAG_SCROLLABLE);
+
 
   template_option1_label = lv_label_create(option1_container);
   lv_label_set_text(template_option1_label, "Option 1");
-  lv_obj_set_style_text_font(template_option1_label, &lv_font_montserrat_14, 0);
-  lv_obj_align(template_option1_label, LV_ALIGN_TOP_MID, 0, 10);
+  lv_obj_set_style_text_font(template_option1_label, &lv_font_montserrat_28, 0);
+  lv_obj_align(template_option1_label, LV_ALIGN_TOP_LEFT, -10, 0);
 
   template_option1_time = lv_label_create(option1_container);
   lv_label_set_text(template_option1_time, "00:00");
-  lv_obj_set_style_text_font(template_option1_time, &lv_font_montserrat_18, 0);
-  lv_obj_align(template_option1_time, LV_ALIGN_BOTTOM_MID, 0, -10);
+  lv_obj_set_style_text_font(template_option1_time, &lv_font_montserrat_40, 0);
+  lv_obj_align(template_option1_time, LV_ALIGN_TOP_MID, 0,60);
 
   template_option2_btn = lv_btn_create(template_button_container);
-  lv_obj_set_size(template_option2_btn, 140, 80);
+  lv_obj_set_size(template_option2_btn, 142, 146);
   lv_obj_set_pos(template_option2_btn, 155, 10);
   lv_obj_set_style_bg_color(template_option2_btn, lv_color_hex(COLOR_BTN_SECONDARY), 0);
   lv_obj_set_style_radius(template_option2_btn, 8, 0);
   lv_obj_add_event_cb(template_option2_btn, template_option2_cb, LV_EVENT_CLICKED, NULL);
+  lv_obj_clear_flag( template_option2_btn, LV_OBJ_FLAG_SCROLLABLE);
+
 
   lv_obj_t *option2_container = lv_obj_create(template_option2_btn);
-  lv_obj_set_size(option2_container, lv_pct(90), lv_pct(90));
+  lv_obj_set_size(option2_container, lv_pct(100), lv_pct(100));
   lv_obj_center(option2_container);
   lv_obj_set_style_bg_opa(option2_container, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(option2_container, 0, 0);
+  lv_obj_clear_flag(option2_container, LV_OBJ_FLAG_SCROLLABLE);
+
 
   template_option2_label = lv_label_create(option2_container);
   lv_label_set_text(template_option2_label, "Option 2");
-  lv_obj_set_style_text_font(template_option2_label, &lv_font_montserrat_14, 0);
-  lv_obj_align(template_option2_label, LV_ALIGN_TOP_MID, 0, 10);
+  lv_obj_set_style_text_font(template_option2_label, &lv_font_montserrat_28, 0);
+  lv_obj_align(template_option2_label, LV_ALIGN_TOP_LEFT, -10, 0);
 
   template_option2_time = lv_label_create(option2_container);
   lv_label_set_text(template_option2_time, "00:00");
-  lv_obj_set_style_text_font(template_option2_time, &lv_font_montserrat_18, 0);
-  lv_obj_align(template_option2_time, LV_ALIGN_BOTTOM_MID, 0, -10);
+  lv_obj_set_style_text_font(template_option2_time, &lv_font_montserrat_40, 0);
+  lv_obj_align(template_option2_time, LV_ALIGN_TOP_MID, 0, 60);
 
   // Swipe area
   template_swipe_area = lv_obj_create(template_page);
@@ -655,7 +804,7 @@ void create_template_page() {
   // Dot indicators
   lv_obj_t *dots_container = lv_obj_create(template_page);
   lv_obj_set_size(dots_container, 60, 20);
-  lv_obj_align(dots_container, LV_ALIGN_CENTER, 0, 105);
+  lv_obj_align(dots_container, LV_ALIGN_TOP_MID, 0, 230);
   lv_obj_set_style_bg_opa(dots_container, LV_OPA_TRANSP, 0);
   lv_obj_set_style_border_width(dots_container, 0, 0);
   lv_obj_set_style_pad_all(dots_container, 0, 0);
@@ -676,13 +825,14 @@ void create_template_page() {
 
   // Start button
   template_start_btn = lv_btn_create(template_page);
-  lv_obj_set_size(template_start_btn, 100, 40);
-  lv_obj_align(template_start_btn, LV_ALIGN_BOTTOM_MID, 0, -20);
-  lv_obj_set_style_bg_color(template_start_btn, lv_color_hex(COLOR_BTN_SUCCESS), 0);
+  lv_obj_set_size(template_start_btn, 150, 46);
+  lv_obj_align(template_start_btn, LV_ALIGN_BOTTOM_MID, 0, -16);
+  lv_obj_set_style_bg_color(template_start_btn, lv_color_hex(COLOR_BTN_PRIMARY), 0);
   lv_obj_add_event_cb(template_start_btn, template_start_cb, LV_EVENT_CLICKED, NULL);
   lv_obj_t *start_label = lv_label_create(template_start_btn);
   lv_label_set_text(start_label, "Start");
-  lv_obj_set_style_text_color(start_label, lv_color_hex(COLOR_TEXT_DARK), 0);
+  lv_obj_set_style_text_color(start_label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+  lv_obj_set_style_text_font(template_start_btn, &lv_font_montserrat_20, 0);
   lv_obj_center(start_label);
 }
 
@@ -697,7 +847,7 @@ void create_detail_page() {
   lv_obj_clear_flag(detail_page, LV_OBJ_FLAG_SCROLLABLE);
 
   // Header mit Battery
-  lv_obj_t *detail_header = create_page_header(detail_page, "Detail", true);
+  lv_obj_t *detail_header = create_page_header(detail_page, "Template", true);
   detail_header_label = lv_obj_get_child(detail_header, 1); // Title label
   detail_battery_widget = lv_obj_get_child(detail_header, 2); // Battery widget
 
@@ -755,6 +905,7 @@ void hide_all_pages() {
   lv_obj_add_flag(main_page, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(template_page, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(detail_page, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(loading_page, LV_OBJ_FLAG_HIDDEN);  // Include loading page
 }
 
 void update_template_content(PageContent content) {
@@ -775,7 +926,16 @@ void show_current_page() {
   hide_all_pages();
   
   switch (app_state.current_state) {
+    case STATE_LOADING:
+      lv_obj_clear_flag(loading_page, LV_OBJ_FLAG_HIDDEN);
+      DEBUG_PRINTLN("Showing loading page");
+      break;
+      
     case STATE_MAIN:
+      // Clean up loading screen when transitioning to main
+      if (LOADING_SCREEN_ENABLED) {
+        cleanup_loading_screen();
+      }
       lv_obj_clear_flag(main_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing main page");
       break;
@@ -815,20 +975,34 @@ void show_current_page() {
       break;
   }
   
-  // Battery widgets in allen aktiven Pages updaten
-  update_all_battery_widgets();
+  // Battery widgets in allen aktiven Pages updaten (außer Loading)
+  if (app_state.current_state != STATE_LOADING) {
+    update_all_battery_widgets();
+  }
 }
 
 void ui_init() {
   DEBUG_PRINTLN("Initializing UI...");
   
-  // Battery System initialisieren
-  battery_init();
+  // Battery System initialisieren (nur wenn nicht im Loading State)
+  if (app_state.current_state != STATE_LOADING) {
+    battery_init();
+  }
+  
+  // Create loading page first if enabled
+  if (LOADING_SCREEN_ENABLED) {
+    create_loading_page();
+  }
   
   create_main_page();
   create_template_page();
   create_detail_page();
   create_popup();
+  
+  // Initialize battery system after UI creation if not in loading
+  if (app_state.current_state != STATE_LOADING) {
+    battery_init();
+  }
   
   show_current_page();
   

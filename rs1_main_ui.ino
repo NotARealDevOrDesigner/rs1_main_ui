@@ -1,13 +1,13 @@
 /*
 =============================================================================
-ESP32-C6 Camera Control App - Main Application (ohne Battery System)
+ESP32-C6 Camera Control App - Main Application mit Loading Screen
 =============================================================================
 
 File Structure:
-- config.h         : Hardware configuration & constants
-- state_machine.h  : State management system
+- config.h         : Hardware configuration & constants (with loading config)
+- state_machine.h  : State management system (with loading state)
 - hardware.h       : Hardware abstraction layer  
-- ui.h            : User interface system with battery
+- ui.h            : User interface system with battery & loading screen
 - images.h        : Icons system
 - battery.h       : Complete battery management system
 - main.ino        : Main application (this file)
@@ -32,19 +32,34 @@ void app_init() {
   state_machine_init();
   hardware_init();
   
-  // Battery system vor UI initialisieren
-  battery_init();
+  // Battery system initialization (delayed if loading screen is active)
+  if (!LOADING_SCREEN_ENABLED) {
+    battery_init();
+    DEBUG_PRINTLN("Battery system initialized");
+  } else {
+    DEBUG_PRINTLN("Battery system init delayed until after loading");
+  }
   
   ui_init();
   
   DEBUG_PRINTLN("=== Application Ready ===");
   DEBUG_PRINTLN("Available Functions:");
+  DEBUG_PRINTLN("- Loading screen with animations (3s)");
+  DEBUG_PRINTLN("- Smart navigation system (no back loops)");
   DEBUG_PRINTLN("- Main page with 4 buttons & battery display");
   DEBUG_PRINTLN("- Template pages with swipe navigation & battery");
   DEBUG_PRINTLN("- Detail pages with dynamic content & battery");
   DEBUG_PRINTLN("- Popup modal system");
   DEBUG_PRINTLN("- State machine navigation");
   DEBUG_PRINTLN("- Battery management system");
+  DEBUG_PRINTF("- Loading screen: %s\n", LOADING_SCREEN_ENABLED ? "ENABLED" : "DISABLED");
+  DEBUG_PRINTLN("========================");
+  DEBUG_PRINTLN("Navigation Hierarchy:");
+  DEBUG_PRINTLN("  MAIN");
+  DEBUG_PRINTLN("  ├── TIMER → DETAIL");
+  DEBUG_PRINTLN("  ├── TLAPSE → DETAIL");
+  DEBUG_PRINTLN("  ├── INTERVAL → DETAIL");
+  DEBUG_PRINTLN("  └── SETTINGS");
   DEBUG_PRINTLN("========================");
 }
 
@@ -52,8 +67,27 @@ void app_loop() {
   // Handle LVGL tasks
   lv_timer_handler();
   
-  // Battery System Updates
-  battery_system_update();
+  // Check if loading screen should timeout
+  if (LOADING_SCREEN_ENABLED) {
+    check_loading_timeout();
+    
+    // Initialize battery system after loading screen ends
+    static bool battery_initialized_after_loading = false;
+    if (app_state.current_state != STATE_LOADING && !battery_initialized_after_loading) {
+      battery_init();
+      battery_initialized_after_loading = true;
+      DEBUG_PRINTLN("Battery system initialized after loading screen");
+    }
+  }
+  
+  // Battery System Updates (only if initialized)
+  static bool battery_system_active = false;
+  if (app_state.current_state != STATE_LOADING || !LOADING_SCREEN_ENABLED) {
+    if (!battery_system_active) {
+      battery_system_active = true;
+    }
+    battery_system_update();
+  }
   
   // Example: Update dynamic text every 10 seconds for demo
   static unsigned long lastUpdate = 0;
@@ -82,8 +116,67 @@ void handle_serial_commands() {
     if (command.startsWith("bat") || command.indexOf("battery") >= 0) {
       handle_battery_serial_commands(command);
     }
+    // Loading screen commands
+    else if (command == "loading skip" || command == "skip") {
+      if (app_state.current_state == STATE_LOADING) {
+        DEBUG_PRINTLN("Skipping loading screen...");
+        change_state(STATE_MAIN);
+        show_current_page();
+      } else {
+        DEBUG_PRINTLN("Loading screen is not active");
+      }
+    }
+    else if (command == "loading status") {
+      DEBUG_PRINTF("Loading screen enabled: %s\n", LOADING_SCREEN_ENABLED ? "YES" : "NO");
+      DEBUG_PRINTF("Current state: %d\n", app_state.current_state);
+      if (app_state.current_state == STATE_LOADING) {
+        unsigned long elapsed = millis() - app_state.loading_start_time;
+        unsigned long remaining = LOADING_DURATION_MS - elapsed;
+        DEBUG_PRINTF("Loading time remaining: %lu ms\n", remaining > 0 ? remaining : 0);
+      }
+    }
+    // Navigation test commands
+    else if (command == "nav test") {
+      DEBUG_PRINTLN("Testing navigation system...");
+      DEBUG_PRINTF("Current: %d, Parent would be: %d\n", 
+                   app_state.current_state, get_parent_state(app_state.current_state));
+    }
+    else if (command == "nav timer") {
+      DEBUG_PRINTLN("Navigating to TIMER");
+      change_state(STATE_TIMER);
+      show_current_page();
+    }
+    else if (command == "nav detail") {
+      if (is_main_template_state(app_state.current_state)) {
+        DEBUG_PRINTLN("Navigating to DETAIL");
+        app_state.detail_context = get_detail_context();
+        change_state(STATE_DETAIL);
+        show_current_page();
+      } else {
+        DEBUG_PRINTLN("Can only go to DETAIL from template pages");
+      }
+    }
+    else if (command == "nav main") {
+      DEBUG_PRINTLN("Navigating to MAIN");
+      change_state(STATE_MAIN);
+      show_current_page();
+    }
+    else if (command == "nav back") {
+      DEBUG_PRINTLN("Testing back navigation");
+      go_back();
+    }
     else if (command == "help") {
       Serial.println("Available commands:");
+      Serial.println("=== Loading Screen Commands ===");
+      Serial.println("  loading skip    - Skip current loading screen");
+      Serial.println("  loading status  - Show loading screen status");
+      Serial.println("  skip            - Alias for loading skip");
+      Serial.println("=== Navigation Commands ===");
+      Serial.println("  nav test        - Test navigation system");
+      Serial.println("  nav timer       - Go to timer page");
+      Serial.println("  nav detail      - Go to detail page (from template)");
+      Serial.println("  nav main        - Go to main page");
+      Serial.println("  nav back        - Test back navigation");
       Serial.println("=== Battery Commands ===");
       Serial.println("  bat <0-100>     - Set battery level");
       Serial.println("  bat demo on/off - Enable/disable demo animation");
@@ -112,16 +205,29 @@ void setup() {
   String LVGL_Arduino = String('V') + lv_version_major() + "." + lv_version_minor() + "." + lv_version_patch();
   DEBUG_PRINTLN("LVGL Version: " + LVGL_Arduino);
   
+  // Show loading screen configuration
+  if (LOADING_SCREEN_ENABLED) {
+    DEBUG_PRINTF("Loading screen: ENABLED (%d ms duration)\n", LOADING_DURATION_MS);
+  } else {
+    DEBUG_PRINTLN("Loading screen: DISABLED (debug mode)");
+  }
+  
   // Initialize application
   app_init();
   
   DEBUG_PRINTLN("=== Setup Complete ===");
-  DEBUG_PRINTLN("Ready for user interaction!");
-  DEBUG_PRINTLN("Serial Commands available - type 'help' for list");
-  DEBUG_PRINTLN("Battery demo animation is running...");
-  
-  // Initial battery status
-  print_battery_status();
+  if (LOADING_SCREEN_ENABLED) {
+    DEBUG_PRINTLN("Showing loading screen...");
+    DEBUG_PRINTLN("Serial Commands available:");
+    DEBUG_PRINTLN("- Type 'skip' to bypass loading screen");
+    DEBUG_PRINTLN("- Type 'nav back' to test navigation");
+    DEBUG_PRINTLN("- Type 'help' for full command list");
+  } else {
+    DEBUG_PRINTLN("Ready for user interaction!");
+    DEBUG_PRINTLN("Serial Commands available - type 'help' for list");
+    // Initial battery status (only if not loading)
+    print_battery_status();
+  }
 }
 
 void loop() {
