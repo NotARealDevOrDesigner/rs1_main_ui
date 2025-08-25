@@ -159,11 +159,11 @@ void values_init() {
   timer_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};  // 00:00
   timer_values.option2 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};  // 00:00
   
-  // Initialize Timelapse values - mit Frame-Logik
+  // Initialize Timelapse values - GEÄNDERT: Total Time verwendet jetzt auch adaptive Schritte
   tlapse_values.page_title = "Timelapse";
   tlapse_values.option1_label = "Total Time";
   tlapse_values.option2_label = "Frames";
-  tlapse_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_LARGE}; // 00:00
+  tlapse_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL}; // 00:00 - GEÄNDERT: war VALUE_INCREMENT_LARGE
   tlapse_values.option2 = {0, VALUE_FORMAT_COUNT, 0, 0, 1};                       // 0 frames (max wird dynamisch gesetzt)
   
   // Initialize Interval values - nur Timer, keine zweite Option
@@ -179,6 +179,7 @@ void values_init() {
   update_page_content_from_values(STATE_INTERVAL);
   
   DEBUG_PRINTLN("Value storage initialized - all values start at 00:00");
+  DEBUG_PRINTLN("T-Lapse Total Time now uses adaptive encoder steps (1s/10s/30s)");
 }
 
 String format_time_value(uint32_t seconds, uint8_t format) {
