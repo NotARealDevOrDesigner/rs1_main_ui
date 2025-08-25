@@ -22,6 +22,47 @@ config.h - Hardware Configuration & System Constants
 #define LEDC_TIMER_10_BIT     10
 
 // =============================================================================
+// ROTARY ENCODER CONFIGURATION
+// =============================================================================
+#define ENCODER_PIN_A         8      // Rotary encoder CLK pin (pin A)
+#define ENCODER_PIN_B         7      // Rotary encoder DT pin (pin B)  
+#define ENCODER_PIN_BUTTON    6      // Rotary encoder push button (optional)
+#define ENCODER_DEBOUNCE_MS   50     // Debounce time in milliseconds
+#define ENCODER_STEPS_PER_CLICK 4    // Steps per physical click (depends on encoder)
+
+// =============================================================================
+// VALUE EDITING CONFIGURATION
+// =============================================================================
+#define VALUE_INCREMENT_SMALL   1    // Small increment (1 second)
+#define VALUE_INCREMENT_LARGE   10   // Large increment (10 seconds)
+#define VALUE_MIN_SECONDS       0    // Minimum value (00:00)
+#define VALUE_MAX_SECONDS       3599 // Maximum value (59:59)
+
+// Adaptive encoder configuration - VEREINFACHT
+#define ENCODER_SPEED_FAST_MS     80   // Fast rotation threshold (time between clicks)
+#define ENCODER_SPEED_MEDIUM_MS   250  // Medium rotation threshold
+// Alles >= MEDIUM_MS = Slow (1er Schritte)
+
+// Schritt-Größen - NUR NOCH 3 STUFEN
+#define ENCODER_STEP_FAST         30   // 30 Sekunden bei schneller Drehung
+#define ENCODER_STEP_MEDIUM       10   // 10 Sekunden bei mittlerer Drehung  
+#define ENCODER_STEP_SLOW         1    // 1 Sekunde bei langsamer Drehung
+
+// Hysterese für stabiles Verhalten
+#define ENCODER_HYSTERESIS_ENABLED true
+#define ENCODER_HYSTERESIS_FACTOR  1.3f  // 30% Hysterese
+
+// Glättung/Filterung
+#define ENCODER_SMOOTHING_ENABLED true
+#define ENCODER_SMOOTHING_SAMPLES 3     // Durchschnitt über 3 Messungen
+#define ENCODER_MIN_CHANGE_TIME   15    // Mindestens 15ms zwischen Änderungen
+
+// Value display format
+#define VALUE_FORMAT_MM_SS      0    // MM:SS format (minutes:seconds)
+#define VALUE_FORMAT_SS         1    // SS format (seconds only)
+#define VALUE_FORMAT_COUNT      2    // Simple counter format
+
+// =============================================================================
 // DISPLAY SETTINGS
 // =============================================================================
 #define SCREEN_WIDTH  172
@@ -38,7 +79,7 @@ config.h - Hardware Configuration & System Constants
 // LOADING SCREEN CONFIGURATION
 // =============================================================================
 #define LOADING_SCREEN_ENABLED    true      // Set to false to skip loading screen for debugging
-#define LOADING_DURATION_MS       7000      // 3 seconds loading time
+#define LOADING_DURATION_MS       7000      // 7 seconds loading time
 #define LOADING_SPINNER_SPEED     200       // Animation speed in ms
 
 // =============================================================================
@@ -87,6 +128,19 @@ config.h - Hardware Configuration & System Constants
   #define DEBUG_PRINT(x)
   #define DEBUG_PRINTLN(x)
   #define DEBUG_PRINTF(...)
+#endif
+
+// Debug-Ausgaben für Encoder
+#define ENCODER_DEBUG_ENABLED true
+
+#if ENCODER_DEBUG_ENABLED && DEBUG_ENABLED
+  #define ENCODER_DEBUG_PRINT(x)      Serial.print("[ENC] "); Serial.print(x)
+  #define ENCODER_DEBUG_PRINTLN(x)    Serial.print("[ENC] "); Serial.println(x)
+  #define ENCODER_DEBUG_PRINTF(...)   Serial.print("[ENC] "); Serial.printf(__VA_ARGS__)
+#else
+  #define ENCODER_DEBUG_PRINT(x)
+  #define ENCODER_DEBUG_PRINTLN(x)
+  #define ENCODER_DEBUG_PRINTF(...)
 #endif
 
 #endif // CONFIG_H
