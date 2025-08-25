@@ -231,6 +231,8 @@ void setup() {
 }
 
 void loop() {
+  // Features
+
   // Handle serial commands for testing
   handle_serial_commands();
   
