@@ -161,7 +161,7 @@ void values_init() {
   
   // Initialize Timelapse values - GEÄNDERT: Total Time verwendet jetzt auch adaptive Schritte
   tlapse_values.page_title = "Timelapse";
-  tlapse_values.option1_label = "Total Time";
+  tlapse_values.option1_label = "Total";
   tlapse_values.option2_label = "Frames";
   tlapse_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL}; // 00:00 - GEÄNDERT: war VALUE_INCREMENT_LARGE
   tlapse_values.option2 = {0, VALUE_FORMAT_COUNT, 0, 0, 1};                       // 0 frames (max wird dynamisch gesetzt)

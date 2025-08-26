@@ -16,6 +16,7 @@ images.h - Icons
 #include "TimelapseIcon.h"
 #include "TimerIcon.h"
 #include "IntervalIcon.h"
+#include "BackIcon.h"
 #include "battery.h"  // Battery management system
 
 // =============================================================================
@@ -25,6 +26,7 @@ LV_IMG_DECLARE(icon_timer);
 LV_IMG_DECLARE(icon_timelapse);
 LV_IMG_DECLARE(icon_interval);
 LV_IMG_DECLARE(icon_settings);
+LV_IMG_DECLARE(icon_back);
 
 // =============================================================================
 // VERBESSERTE ICONS (16x16 pixels für bessere Qualität)
@@ -49,6 +51,13 @@ extern const lv_img_dsc_t TimerIcon;
 // =============================================================================
 extern const lv_img_dsc_t TimelapseIcon;  
 #define icon_timelapse TimelapseIcon    
+
+// =============================================================================
+// Back ICON - Pfeil
+// =============================================================================
+
+extern const lv_img_dsc_t IconBack;  
+#define icon_back IconBack  
 
 // =============================================================================
 // INTERVAL ICON - Blitz/Zickzack

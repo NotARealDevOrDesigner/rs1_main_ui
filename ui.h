@@ -200,7 +200,7 @@ void create_loading_page() {
 
   DEBUG_PRINTLN("Loading screen created");
 }
-
+/*
 lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back_btn) {
   lv_obj_t *header = lv_obj_create(parent);
   lv_obj_set_size(header, lv_pct(100), 50);
@@ -210,25 +210,45 @@ lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back
   lv_obj_set_style_pad_all(header, 0, 0);
 
   if (show_back_btn) {
-    lv_obj_t *back_btn = lv_btn_create(header);
-    lv_obj_set_size(back_btn, 60, 30);
-    lv_obj_align(back_btn, LV_ALIGN_LEFT_MID, 10, 0);
-    lv_obj_set_style_bg_color(back_btn, lv_color_hex(COLOR_BTN_DANGER), 0);
-    lv_obj_set_style_radius(back_btn, 5, 0);
+    // Container für Back-Button ohne Hintergrund
+    lv_obj_t *back_container = lv_obj_create(header);
+    lv_obj_set_size(back_container, 80, 30);
+    lv_obj_align(back_container, LV_ALIGN_LEFT_MID, 10, 0);
+    lv_obj_set_style_bg_opa(back_container, LV_OPA_TRANSP, 0); // Transparenter Hintergrund
+    lv_obj_set_style_border_width(back_container, 0, 0);
+    lv_obj_set_style_pad_all(back_container, 0, 0);
+    lv_obj_clear_flag(back_container, LV_OBJ_FLAG_SCROLLABLE);
     
+    // Event Handler für den Container hinzufügen
     if (strcmp(title, "Detail") == 0) {
-      lv_obj_add_event_cb(back_btn, detail_back_cb, LV_EVENT_CLICKED, NULL);
+      lv_obj_add_event_cb(back_container, detail_back_cb, LV_EVENT_CLICKED, NULL);
     } else if (strcmp(title, "Interval") == 0) {
-      lv_obj_add_event_cb(back_btn, interval_back_cb, LV_EVENT_CLICKED, NULL);
+      lv_obj_add_event_cb(back_container, interval_back_cb, LV_EVENT_CLICKED, NULL);
     } else {
-      lv_obj_add_event_cb(back_btn, template_back_cb, LV_EVENT_CLICKED, NULL);
+      lv_obj_add_event_cb(back_container, template_back_cb, LV_EVENT_CLICKED, NULL);
     }
     
-    lv_obj_t *back_label = lv_label_create(back_btn);
+    // Pfeil-Symbol (Unicode)
+    lv_obj_t *arrow_icon = lv_img_create(back_container);
+    lv_img_set_src(arrow_icon, &icon_back); // Hier Ihr Icon-Name
+    lv_obj_align(arrow_icon, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_style_img_recolor(arrow_icon, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+    lv_obj_set_style_img_recolor_opa(arrow_icon, LV_OPA_COVER, 0);
+
+    
+    lv_obj_t *arrow_label = lv_label_create(back_container);
+    lv_label_set_text(arrow_label, "<"); // Unicode left-pointing angle bracket
+    lv_obj_set_style_text_font(arrow_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(arrow_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(arrow_label, LV_ALIGN_LEFT_MID, 0, 0);
+    
+
+    // "Back" Text
+    lv_obj_t *back_label = lv_label_create(back_container);
     lv_label_set_text(back_label, "Back");
-    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(back_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
-    lv_obj_center(back_label);
+    lv_obj_align(back_label, LV_ALIGN_LEFT_MID, 20, 0); // 20px Abstand vom Pfeil
   }
   
   lv_obj_t *title_label = lv_label_create(header);
@@ -238,6 +258,67 @@ lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back
   lv_obj_align(title_label, LV_ALIGN_CENTER, 0, 0);
   
   lv_obj_t *battery_widget = create_battery_widget(header, 118, 12);
+  
+  return header;
+}
+*/
+lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back_btn) {
+  lv_obj_t *header = lv_obj_create(parent);
+  lv_obj_set_size(header, lv_pct(100), 50);
+  lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 8);
+  lv_obj_set_style_bg_color(header, lv_color_hex(COLOR_BG_HEADER), 0);
+  lv_obj_set_style_border_width(header, 0, 0);
+  lv_obj_set_style_pad_all(header, 0, 0);
+
+  if (show_back_btn) {
+    // Container für Back-Button ohne Hintergrund
+    lv_obj_t *back_container = lv_obj_create(header);
+    lv_obj_set_size(back_container, 80, 30);
+    lv_obj_align(back_container, LV_ALIGN_LEFT_MID, 10, 0);
+    lv_obj_set_style_bg_opa(back_container, LV_OPA_TRANSP, 0); // Transparenter Hintergrund
+    lv_obj_set_style_border_width(back_container, 0, 0);
+    lv_obj_set_style_pad_all(back_container, 0, 0);
+    lv_obj_clear_flag(back_container, LV_OBJ_FLAG_SCROLLABLE);
+    
+    // Event Handler für den Container hinzufügen
+    if (strcmp(title, "Detail") == 0) {
+      lv_obj_add_event_cb(back_container, detail_back_cb, LV_EVENT_CLICKED, NULL);
+    } else if (strcmp(title, "Interval") == 0) {
+      lv_obj_add_event_cb(back_container, interval_back_cb, LV_EVENT_CLICKED, NULL);
+    } else {
+      lv_obj_add_event_cb(back_container, template_back_cb, LV_EVENT_CLICKED, NULL);
+    }
+    
+    // Pfeil-Symbol
+    lv_obj_t *arrow_icon = lv_img_create(back_container);
+    lv_img_set_src(arrow_icon, &icon_back);
+    lv_obj_align(arrow_icon, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_style_img_recolor(arrow_icon, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+    lv_obj_set_style_img_recolor_opa(arrow_icon, LV_OPA_COVER, 0);
+
+    // "Back" Text
+    lv_obj_t *back_label = lv_label_create(back_container);
+    lv_label_set_text(back_label, "Back");
+    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(back_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+    lv_obj_align(back_label, LV_ALIGN_LEFT_MID, 20, 0); // 20px Abstand vom Pfeil
+  }
+  
+  lv_obj_t *title_label = lv_label_create(header);
+  lv_label_set_text(title_label, title);
+  lv_obj_set_style_text_font(title_label, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(title_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+  lv_obj_align(title_label, LV_ALIGN_CENTER, 0, 0);
+  
+  // FIX: Adjust battery widget position based on back button presence
+  lv_obj_t *battery_widget;
+  if (show_back_btn) {
+    // When back button is present, position battery widget more precisely
+    battery_widget = create_battery_widget(header, 128, 12); // Slightly adjust X position
+  } else {
+    // Main page positioning (no back button)
+    battery_widget = create_battery_widget(header, 118, 12); // Original position
+  }
   
   return header;
 }
@@ -556,7 +637,7 @@ void create_template_page() {
   lv_obj_set_style_pad_all(template_page, 0, 0);
   lv_obj_add_flag(template_page, LV_OBJ_FLAG_HIDDEN);
 
-  lv_obj_t *template_header = create_page_header(template_page, "Template", true);
+  lv_obj_t *template_header = create_page_header(template_page, "", true);
   template_header_label = lv_obj_get_child(template_header, 1);
   template_battery_widget = lv_obj_get_child(template_header, 2);
 
@@ -667,7 +748,7 @@ void create_interval_page() {
   lv_obj_set_style_pad_all(interval_page, 0, 0);
   lv_obj_add_flag(interval_page, LV_OBJ_FLAG_HIDDEN);
 
-  lv_obj_t *interval_header = create_page_header(interval_page, "Interval", true);
+  lv_obj_t *interval_header = create_page_header(interval_page, "", true);
   interval_header_label = lv_obj_get_child(interval_header, 1);
   interval_battery_widget = lv_obj_get_child(interval_header, 2);
 
@@ -726,7 +807,7 @@ void create_detail_page() {
   lv_obj_set_scrollbar_mode(detail_page, LV_SCROLLBAR_MODE_OFF);
   lv_obj_clear_flag(detail_page, LV_OBJ_FLAG_SCROLLABLE);
 
-  lv_obj_t *detail_header = create_page_header(detail_page, "Detail", true);
+  lv_obj_t *detail_header = create_page_header(detail_page, "", true);
   detail_header_label = lv_obj_get_child(detail_header, 1);
   detail_battery_widget = lv_obj_get_child(detail_header, 2);
 
@@ -878,7 +959,7 @@ void hide_all_pages() {
 
 void update_template_content(PageContent content) {
   // Update the labels but DON'T reset positions or current_option
-  lv_label_set_text(template_header_label, content.heading.c_str());
+  //lv_label_set_text(template_header_label, content.heading.c_str());
   lv_label_set_text(template_option1_label, content.option1_text.c_str());
   lv_label_set_text(template_option2_label, content.option2_text.c_str());
   lv_label_set_text(template_option1_time, content.option1_time.c_str());
@@ -895,7 +976,7 @@ void update_template_content(PageContent content) {
 
 void init_template_content(PageContent content) {
   // This function is used when first showing a page - resets positions
-  lv_label_set_text(template_header_label, content.heading.c_str());
+  //lv_label_set_text(template_header_label, content.heading.c_str());
   lv_label_set_text(template_option1_label, content.option1_text.c_str());
   lv_label_set_text(template_option2_label, content.option2_text.c_str());
   lv_label_set_text(template_option1_time, content.option1_time.c_str());
@@ -911,7 +992,7 @@ void init_template_content(PageContent content) {
 }
 
 void update_interval_content(PageContent content) {
-  lv_label_set_text(interval_header_label, content.heading.c_str());
+  //lv_label_set_text(interval_header_label, content.heading.c_str());
   lv_label_set_text(interval_single_label, content.option1_text.c_str());
   lv_label_set_text(interval_single_time, content.option1_time.c_str());
 }

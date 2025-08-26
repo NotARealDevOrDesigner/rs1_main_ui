@@ -79,7 +79,7 @@ config.h - Hardware Configuration & System Constants
 // LOADING SCREEN CONFIGURATION
 // =============================================================================
 #define LOADING_SCREEN_ENABLED    true      // Set to false to skip loading screen for debugging
-#define LOADING_DURATION_MS       7000      // 7 seconds loading time
+#define LOADING_DURATION_MS       1000      // 7 seconds loading time
 #define LOADING_SPINNER_SPEED     200       // Animation speed in ms
 
 // =============================================================================
