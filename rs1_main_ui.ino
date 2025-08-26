@@ -22,7 +22,7 @@ File Structure:
 #include "hardware.h"
 #include "ui.h"
 #include "battery.h"  // Battery management system
-
+#include "timer_system.h" 
 // =============================================================================
 // ROTARY ENCODER HANDLING
 // =============================================================================
@@ -143,6 +143,9 @@ void app_loop() {
     battery_system_update();
   }
   
+  // Timer system
+  timer_system_update();
+
   // Handle rotary encoder input
   handle_encoder_input();
   
@@ -301,6 +304,28 @@ void handle_serial_commands() {
       DEBUG_PRINTLN("Testing back navigation");
       go_back();
     }
+
+    else if (command.startsWith("timer ")) {
+      String param = command.substring(6);
+      if (param == "start") {
+        if (app_state.current_state == STATE_TIMER) {
+          start_timer_execution();
+          DEBUG_PRINTLN("Timer started via serial command");
+        } else {
+          DEBUG_PRINTLN("Navigate to Timer page first");
+        }
+      }
+      else if (param == "cancel") {
+        if (runtime.state != TIMER_IDLE) {
+          cancel_timer_execution();
+          show_current_page();
+          DEBUG_PRINTLN("Timer cancelled via serial command");
+        } else {
+          DEBUG_PRINTLN("No timer running");
+        }
+      }
+    }
+
     else if (command == "help") {
       Serial.println("Available commands:");
       Serial.println("=== Loading Screen Commands ===");
@@ -341,6 +366,9 @@ void handle_serial_commands() {
       Serial.println("  4. Values are saved globally");
       Serial.println("  5. 3 speeds: Slow (1s), Medium (10s), Fast (30s)");
       Serial.println("  6. Hysteresis prevents jumping between speeds");
+      Serial.println("=== Timer System Commands ===");
+      Serial.println("  timer start/cancel - Timer control");
+      Serial.println("  servo test         - Test servo");
     }
     else {
       Serial.println("Unknown command. Type 'help' for available commands.");

@@ -6,6 +6,7 @@ hardware.h - Hardware Abstraction Layer with Rotary Encoder Support
 
 #ifndef HARDWARE_H
 #define HARDWARE_H
+#define LEDC_FREQ 5000 
 
 #include <lvgl.h>
 #include "esp_lcd_touch_axs5106l.h"
@@ -412,6 +413,8 @@ void my_print(const char *buf) {
 }
 #endif
 
+
+
 void my_disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p) {
   uint32_t w = (area->x2 - area->x1 + 1);
   uint32_t h = (area->y2 - area->y1 + 1);
@@ -454,8 +457,8 @@ void hardware_init() {
   gfx->fillScreen(RGB565_BLACK);
 
 #ifdef GFX_BL
-  ledcAttach(GFX_BL, LEDC_FREQ, LEDC_TIMER_10_BIT);
-  ledcWrite(GFX_BL, (1 << LEDC_TIMER_10_BIT) / 100 * 80);
+  pinMode(GFX_BL, OUTPUT);
+  digitalWrite(GFX_BL, HIGH);
 #endif
 
   // Init touch device

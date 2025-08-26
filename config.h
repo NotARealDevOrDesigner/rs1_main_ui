@@ -7,6 +7,19 @@ config.h - Hardware Configuration & System Constants
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// TIMER SYSTEM CONFIGURATION
+// =============================================================================
+// Servo Configuration
+#define SERVO_PIN 9
+#define SERVO_START_POSITION 0      // Adjustable start position (0-180°)
+#define SERVO_END_POSITION 90       // Adjustable end position (0-180°) 
+#define SERVO_ACTIVATION_TIME 0.6   // Adjustable activation time in seconds
+
+// Timer Colors (add to existing color definitions)
+#define COLOR_TIMER_PRIMARY   0x007BFF    // Blue for main countdown
+#define COLOR_TIMER_SECONDARY 0x808080    // Gray for release phase
+#define COLOR_TIMER_OVERLAY   0x1A1A1A    // Dark overlay background
+
 // =============================================================================
 // HARDWARE CONFIGURATION
 // =============================================================================

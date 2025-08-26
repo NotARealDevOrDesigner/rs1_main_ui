@@ -12,7 +12,7 @@ ui.h - Complete User Interface System with Interval Single Card
 #include "state_machine.h"
 #include "images.h"
 #include "battery.h"
-
+#include "timer_system.h"
 // =============================================================================
 // STRUCTURES
 // =============================================================================
@@ -907,10 +907,30 @@ void template_option2_cb(lv_event_t *e) {
 void template_start_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
     DEBUG_PRINTLN("Start button pressed");
-    lv_obj_clear_flag(popup_overlay, LV_OBJ_FLAG_HIDDEN);
+    
+    // Bestimme welcher Modus basierend auf aktuellem State
+    switch (app_state.current_state) {
+      case STATE_TIMER:
+        start_timer_execution();
+        break;
+      case STATE_TLAPSE:
+        start_tlapse_execution();
+        break;
+      default:
+        DEBUG_PRINTLN("Invalid state for timer start");
+        break;
+    }
   }
 }
 
+/*
+void template_start_cb(lv_event_t *e) {
+  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+    DEBUG_PRINTLN("Start button pressed");
+    lv_obj_clear_flag(popup_overlay, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+*/
 void interval_back_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
     DEBUG_PRINTLN("Interval back pressed");
@@ -930,10 +950,17 @@ void interval_single_cb(lv_event_t *e) {
 void interval_start_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
     DEBUG_PRINTLN("Interval start button pressed");
+    start_interval_execution();
+  }
+}
+/*
+void interval_start_cb(lv_event_t *e) {
+  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+    DEBUG_PRINTLN("Interval start button pressed");
     lv_obj_clear_flag(popup_overlay, LV_OBJ_FLAG_HIDDEN);
   }
 }
-
+*/
 void detail_back_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
     DEBUG_PRINTLN("Detail back pressed");
@@ -1083,6 +1110,7 @@ void ui_init() {
   create_interval_page();      // Neue separate Interval Seite (1 Karte)
   create_detail_page();
   create_popup();
+  timer_system_init();
   
   // Initialize battery system after UI creation if not in loading
   if (app_state.current_state != STATE_LOADING) {

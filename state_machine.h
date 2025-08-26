@@ -183,6 +183,11 @@ void values_init() {
 }
 
 String format_time_value(uint32_t seconds, uint8_t format) {
+  // Sichere Trigger-Erkennung: -1 als uint32_t ist 4294967295 (0xFFFFFFFF)
+  if (seconds == 4294967295 || (int32_t)seconds == -1) {
+    return "SHOT";
+  }
+  
   switch (format) {
     case VALUE_FORMAT_MM_SS: {
       uint16_t minutes = seconds / 60;
@@ -198,6 +203,7 @@ String format_time_value(uint32_t seconds, uint8_t format) {
       return String(seconds);
   }
 }
+
 
 PageValues* get_current_page_values() {
   switch (app_state.current_state) {
@@ -220,6 +226,9 @@ uint32_t get_option_value(AppState page, int option) {
   return (option == 0) ? values->option1.seconds : values->option2.seconds;
 }
 
+
+
+
 void update_option_value(AppState page, int option, int32_t delta) {
   PageValues* values = nullptr;
   switch (page) {
@@ -231,36 +240,77 @@ void update_option_value(AppState page, int option, int32_t delta) {
   
   OptionValue* target_option = (option == 0) ? &values->option1 : &values->option2;
   
-  // Calculate new value
-  int64_t new_value = (int64_t)target_option->seconds + (delta * target_option->increment);
-  
-  // Apply bounds checking
-  if (new_value < target_option->min_value) {
-    new_value = target_option->min_value;
-  } else if (new_value > target_option->max_value) {
-    new_value = target_option->max_value;
+  // SPEZIAL BEHANDLUNG: Timer Release (Option 1) mit Trigger Mode
+  if (page == STATE_TIMER && option == 1) { // Release Zeit
+    
+    // Cast zu signed int für saubere Trigger-Behandlung
+    int32_t current_value = (int32_t)target_option->seconds;
+    
+    // Handle Trigger Mode (-1)
+    if (current_value == -1) {
+      if (delta > 0) {
+        // Von Trigger nach oben = zu 00:00
+        target_option->seconds = 0;
+        DEBUG_PRINTLN("Switched from Trigger to 00:00");
+      } else {
+        // Von Trigger nach unten = BLOCKIERT, bleibt bei Trigger
+        DEBUG_PRINTLN("Blocked: Cannot scroll down from Trigger mode");
+        return; // Keine Änderung
+      }
+    }
+    // Handle normale Werte (>= 0)
+    else if (current_value >= 0) {
+      int32_t new_value = current_value + (delta * target_option->increment);
+      
+      if (new_value < 0) {
+        // Unter 0 scrollen = zu Trigger
+        target_option->seconds = (uint32_t)-1; // -1 als Trigger-Indikator
+        DEBUG_PRINTLN("Switched from 00:00 to Trigger mode");
+      } else if (new_value > target_option->max_value) {
+        // Über Maximum
+        target_option->seconds = target_option->max_value;
+      } else {
+        // Normaler gültiger Wert
+        target_option->seconds = (uint32_t)new_value;
+      }
+    }
+    // Handle fehlerhafte Werte (sollte nicht passieren)
+    else {
+      DEBUG_PRINTF("ERROR: Invalid timer release value: %d, resetting to 0\n", current_value);
+      target_option->seconds = 0;
+    }
+  } 
+  // NORMALE BEHANDLUNG für alle anderen Optionen
+  else {
+    int64_t new_value = (int64_t)target_option->seconds + (delta * target_option->increment);
+    
+    // Apply bounds checking
+    if (new_value < target_option->min_value) {
+      new_value = target_option->min_value;
+    } else if (new_value > target_option->max_value) {
+      new_value = target_option->max_value;
+    }
+    
+    target_option->seconds = (uint32_t)new_value;
   }
   
   // Special logic for T-Lapse frames: max 1 frame per second
   if (page == STATE_TLAPSE && option == 1) {
-    // Frame count is limited by total time (max 1 frame per second)
     uint32_t total_time_seconds = values->option1.seconds;
-    if (new_value > total_time_seconds) {
-      new_value = total_time_seconds;
-      DEBUG_PRINTF("Frame count limited to %d (max 1 frame per second)\n", (int)new_value);
+    if (values->option2.seconds > total_time_seconds) {
+      values->option2.seconds = total_time_seconds;
+      DEBUG_PRINTF("Frame count auto-adjusted to %d (max 1 frame per second)\n", total_time_seconds);
     }
+    values->option2.max_value = total_time_seconds;
   }
   
-  target_option->seconds = (uint32_t)new_value;
-  
-  // If we changed T-Lapse total time, we might need to adjust frame count
+  // If we changed T-Lapse total time, adjust frame count
   if (page == STATE_TLAPSE && option == 0) {
     uint32_t total_time = target_option->seconds;
     if (values->option2.seconds > total_time) {
       values->option2.seconds = total_time;
       DEBUG_PRINTF("Frame count auto-adjusted to %d (max 1 frame per second)\n", total_time);
     }
-    // Update the maximum allowed frames dynamically
     values->option2.max_value = total_time;
   }
   
@@ -269,9 +319,9 @@ void update_option_value(AppState page, int option, int32_t delta) {
                option + 1,
                format_time_value(target_option->seconds, target_option->format).c_str());
   
-  // Update the page content to reflect new values
   update_page_content_from_values(page);
 }
+
 
 void update_page_content_from_values(AppState page) {
   PageValues* values = nullptr;
