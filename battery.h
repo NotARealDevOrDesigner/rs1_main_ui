@@ -194,7 +194,97 @@ lv_color_t get_battery_color(uint8_t level) {
     return lv_color_hex(COLOR_TEXT_PRIMARY); // Schwarz (#000000)
 }
 
-// Custom Clean Battery Widget erstellen (für Header)
+// Replace your create_battery_widget function with this simplified debug version:
+
+lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
+    DEBUG_PRINTLN("Creating battery widget...");
+    
+    // Container für Battery - Custom Clean Größe
+    lv_obj_t *battery_container = lv_obj_create(parent);
+    lv_obj_set_size(battery_container, BATTERY_WIDGET_WIDTH, BATTERY_WIDGET_HEIGHT);
+    lv_obj_set_pos(battery_container, x, y);
+    lv_obj_set_style_bg_opa(battery_container, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(battery_container, 0, 0);
+    lv_obj_set_style_pad_all(battery_container, 0, 0);
+    
+    // Remove scrollbars from container
+    lv_obj_set_scrollbar_mode(battery_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(battery_container, LV_OBJ_FLAG_SCROLLABLE);
+
+    DEBUG_PRINTLN("Container created");
+
+    // Battery Rahmen (äußere Hülle) - Custom Clean Style
+    lv_obj_t *battery_frame = lv_obj_create(battery_container);
+    lv_obj_set_size(battery_frame, BATTERY_FRAME_WIDTH, BATTERY_FRAME_HEIGHT);
+    lv_obj_set_pos(battery_frame, 0, 2); // Vertikal zentriert
+    lv_obj_set_style_bg_color(battery_frame, lv_color_hex(0xFFFFFF), 0);    // Weißer Hintergrund
+    lv_obj_set_style_bg_opa(battery_frame, LV_OPA_COVER, 0);                // Volldeckend
+    lv_obj_set_style_border_color(battery_frame, lv_color_hex(COLOR_TEXT_PRIMARY), 0); // Schwarzer Rahmen - FORCE BLACK
+    lv_obj_set_style_border_width(battery_frame, 2, 0);                     // 2px Rahmen
+    lv_obj_set_style_radius(battery_frame, 2, 0);                           // Leicht abgerundet
+    lv_obj_set_style_pad_all(battery_frame, 0, 0);  // No padding
+    
+    // Remove scrollbars from frame
+    lv_obj_set_scrollbar_mode(battery_frame, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(battery_frame, LV_OBJ_FLAG_SCROLLABLE);
+
+    DEBUG_PRINTLN("Frame created");
+
+    // Battery Terminal (rechts) - Custom Clean Style
+    lv_obj_t *battery_terminal = lv_obj_create(battery_container);
+    lv_obj_set_size(battery_terminal, BATTERY_TERMINAL_WIDTH, BATTERY_TERMINAL_HEIGHT);
+    lv_obj_set_pos(battery_terminal, BATTERY_FRAME_WIDTH, (BATTERY_WIDGET_HEIGHT - BATTERY_TERMINAL_HEIGHT) / 2);
+    lv_obj_set_style_bg_color(battery_terminal, lv_color_hex(COLOR_TEXT_PRIMARY), 0); // FORCE BLACK
+    lv_obj_set_style_bg_opa(battery_terminal, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(battery_terminal, 0, 0);
+    lv_obj_set_style_radius(battery_terminal, 0, 0);
+    
+    // Remove scrollbars from terminal
+    lv_obj_set_scrollbar_mode(battery_terminal, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(battery_terminal, LV_OBJ_FLAG_SCROLLABLE);
+
+    DEBUG_PRINTLN("Terminal created");
+
+    // ========================================================================
+    // BATTERY FILL - FORCED BRIGHT RED FOR VISIBILITY
+    // ========================================================================
+    lv_obj_t *battery_fill = lv_obj_create(battery_frame);
+    
+    // FORCE EXACT POSITION AND SIZE - NO CONSTANTS
+    lv_obj_set_pos(battery_fill, 0, 0);  // Fixed position
+    lv_obj_set_size(battery_fill, 15, 8);  // Fixed size for 75% of 20px width
+    
+    DEBUG_PRINTF("Fill created at position (2,2) with size 15x8\n");
+    
+    // FORCE BRIGHT RED COLOR FOR MAXIMUM VISIBILITY
+    lv_obj_set_style_bg_color(battery_fill, lv_color_hex(COLOR_TEXT_PRIMARY), 0);  // BRIGHT RED
+    lv_obj_set_style_bg_opa(battery_fill, LV_OPA_COVER, 0);              // FULL OPACITY
+    lv_obj_set_style_border_width(battery_fill, 0, 0);                   // NO BORDER
+    lv_obj_set_style_radius(battery_fill, 0, 0);                         // NO RADIUS
+    lv_obj_set_style_pad_all(battery_fill, 0, 0);                        // NO PADDING
+    
+    // Remove scrollbars from fill
+    lv_obj_set_scrollbar_mode(battery_fill, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(battery_fill, LV_OBJ_FLAG_SCROLLABLE);
+
+    DEBUG_PRINTLN("Fill styled with BRIGHT RED");
+
+    // FORCE THE FILL TO BE VISIBLE AND ON TOP
+    lv_obj_move_foreground(battery_fill);
+    lv_obj_clear_flag(battery_fill, LV_OBJ_FLAG_HIDDEN);
+    
+    DEBUG_PRINTLN("Fill moved to foreground and made visible");
+
+    // User data speichern für Updates
+    lv_obj_set_user_data(battery_container, battery_fill);
+
+    DEBUG_PRINTLN("Battery widget creation complete");
+
+    return battery_container;
+}
+
+/*
+// Custom Clean Battery Widget erstellen (für Header) - FIXED VERSION
 lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
     // Container für Battery - Custom Clean Größe
     lv_obj_t *battery_container = lv_obj_create(parent);
@@ -203,6 +293,10 @@ lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
     lv_obj_set_style_bg_opa(battery_container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(battery_container, 0, 0);
     lv_obj_set_style_pad_all(battery_container, 0, 0);
+    
+    // FIX: Remove scrollbars from container
+    lv_obj_set_scrollbar_mode(battery_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(battery_container, LV_OBJ_FLAG_SCROLLABLE);
 
     // Battery Rahmen (äußere Hülle) - Custom Clean Style
     lv_obj_t *battery_frame = lv_obj_create(battery_container);
@@ -213,6 +307,10 @@ lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
     lv_obj_set_style_border_color(battery_frame, lv_color_hex(COLOR_TEXT_PRIMARY), 0); // Schwarzer Rahmen
     lv_obj_set_style_border_width(battery_frame, 2, 0);                     // 2px Rahmen
     lv_obj_set_style_radius(battery_frame, 2, 0);                           // Leicht abgerundet
+    
+    // FIX: Remove scrollbars from frame
+    lv_obj_set_scrollbar_mode(battery_frame, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(battery_frame, LV_OBJ_FLAG_SCROLLABLE);
 
     // Battery Terminal (rechts) - Custom Clean Style
     lv_obj_t *battery_terminal = lv_obj_create(battery_container);
@@ -221,6 +319,10 @@ lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
     lv_obj_set_style_bg_color(battery_terminal, lv_color_hex(COLOR_TEXT_PRIMARY), 0); // Schwarzer Terminal
     lv_obj_set_style_border_width(battery_terminal, 0, 0);
     lv_obj_set_style_radius(battery_terminal, 0, 0);                        // Eckig, wie dein Design
+    
+    // FIX: Remove scrollbars from terminal
+    lv_obj_set_scrollbar_mode(battery_terminal, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(battery_terminal, LV_OBJ_FLAG_SCROLLABLE);
 
     // ========================================================================
     // BATTERY FILL - HIER KANNST DU DIE POSITION ANPASSEN
@@ -235,8 +337,14 @@ lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
     
     // STYLE DES FILLS:
     lv_obj_set_style_bg_color(battery_fill, get_battery_color(battery_get_level()), 0);
+    lv_obj_set_style_bg_opa(battery_fill, LV_OPA_COVER, 0);  // FIX: Ensure fill is visible
     lv_obj_set_style_border_width(battery_fill, 0, 0);
     lv_obj_set_style_radius(battery_fill, 0, 0);                            // Eckig, clean look
+    lv_obj_set_style_pad_all(battery_fill, 0, 0);  // FIX: Remove any padding
+    
+    // FIX: Remove scrollbars from fill
+    lv_obj_set_scrollbar_mode(battery_fill, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(battery_fill, LV_OBJ_FLAG_SCROLLABLE);
 
     // User data speichern für Updates
     lv_obj_set_user_data(battery_container, battery_fill);
@@ -246,7 +354,69 @@ lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
 
     return battery_container;
 }
+*/
+// Replace your update_battery_widget function with this debug version temporarily:
 
+void update_battery_widget(lv_obj_t *battery_widget) {
+    if (!battery_widget) {
+        DEBUG_PRINTLN("ERROR: battery_widget is NULL");
+        return;
+    }
+    
+    lv_obj_t *battery_fill = (lv_obj_t*)lv_obj_get_user_data(battery_widget);
+    if (!battery_fill) {
+        DEBUG_PRINTLN("ERROR: battery_fill is NULL - user_data not set correctly");
+        return;
+    }
+
+    uint8_t level = battery_get_level();
+    
+    // ========================================================================
+    // DEBUG OUTPUT
+    // ========================================================================
+    DEBUG_PRINTF("=== Battery Widget Update Debug ===\n");
+    DEBUG_PRINTF("Battery Level: %d%%\n", level);
+    DEBUG_PRINTF("Max Fill Width: %d pixels\n", BATTERY_FILL_MAX_WIDTH);
+    
+    // Fill width berechnen (0 bis BATTERY_FILL_MAX_WIDTH pixels)
+    lv_coord_t fill_width = (level * BATTERY_FILL_MAX_WIDTH) / 100;
+    DEBUG_PRINTF("Calculated Fill Width: %d pixels\n", fill_width);
+    
+    // Mindestens 1 pixel wenn level > 0
+    if (fill_width < 1 && level > 0) {
+        fill_width = 1;
+        DEBUG_PRINTLN("Fill width adjusted to minimum 1 pixel");
+    }
+    
+    // FILL BREITE SETZEN:
+    lv_obj_set_width(battery_fill, fill_width);
+    DEBUG_PRINTF("Fill width set to: %d pixels\n", fill_width);
+    
+    // Get current position and size for debugging
+    lv_coord_t fill_x = lv_obj_get_x(battery_fill);
+    lv_coord_t fill_y = lv_obj_get_y(battery_fill);
+    lv_coord_t fill_height = lv_obj_get_height(battery_fill);
+    lv_coord_t current_width = lv_obj_get_width(battery_fill);
+    
+    DEBUG_PRINTF("Fill Position: x=%d, y=%d\n", fill_x, fill_y);
+    DEBUG_PRINTF("Fill Size: %dx%d\n", current_width, fill_height);
+    
+    // FILL FARBE AKTUALISIEREN:
+    lv_color_t fill_color = get_battery_color(level);
+    lv_obj_set_style_bg_color(battery_fill, fill_color, 0);
+    DEBUG_PRINTF("Fill Color: 0x%06X\n", fill_color.full);
+    
+    // Check if fill is hidden or transparent
+    lv_opa_t fill_opa = lv_obj_get_style_bg_opa(battery_fill, 0);
+    DEBUG_PRINTF("Fill Opacity: %d (255=opaque, 0=transparent)\n", fill_opa);
+    
+    // Force visibility (temporary test)
+    lv_obj_set_style_bg_opa(battery_fill, LV_OPA_COVER, 0);
+    DEBUG_PRINTLN("Fill opacity forced to LV_OPA_COVER");
+    
+    DEBUG_PRINTLN("===================================\n");
+}
+/*
 // Battery Widget updaten - Custom Clean Style
 void update_battery_widget(lv_obj_t *battery_widget) {
     if (!battery_widget) return;
@@ -289,7 +459,7 @@ void update_battery_widget(lv_obj_t *battery_widget) {
         // Aktuell keine spezielle Anzeige da Fill immer schwarz ist
     }
 }
-
+*/
 // =============================================================================
 // SYSTEM UPDATE FUNCTIONS
 // =============================================================================
