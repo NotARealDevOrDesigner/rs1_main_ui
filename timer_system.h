@@ -454,7 +454,7 @@ void create_timer_overlays() {
   // Timer Overlay - Time Left Label
   lv_obj_t *timer_time_left_label = lv_label_create(timer_overlay);
   lv_label_set_text(timer_time_left_label, "Time left");
-  lv_obj_set_style_text_font(timer_time_left_label, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_font(timer_time_left_label, &lv_font_montserrat_24, 0);
   lv_obj_set_style_text_color(timer_time_left_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
   lv_obj_align(timer_time_left_label, LV_ALIGN_TOP_MID, 0, 40);
   
@@ -468,20 +468,22 @@ void create_timer_overlays() {
   // Timer Overlay - Remaining Time (for release phase)
   timer_overlay_time_remaining_label = lv_label_create(timer_overlay);
   lv_label_set_text(timer_overlay_time_remaining_label, "");
-  lv_obj_set_style_text_font(timer_overlay_time_remaining_label, &lv_font_montserrat_24, 0);
+  lv_obj_set_style_text_font(timer_overlay_time_remaining_label, &lv_font_montserrat_20, 0);
   lv_obj_set_style_text_color(timer_overlay_time_remaining_label, lv_color_hex(0x808080), 0);
-  lv_obj_align(timer_overlay_time_remaining_label, LV_ALIGN_CENTER, 0, 40);
+  lv_obj_align(timer_overlay_time_remaining_label, LV_ALIGN_CENTER, 0, 38);
   
+ 
   // Timer Overlay - Cancel Button
   timer_overlay_cancel_btn = lv_btn_create(timer_overlay);
-  lv_obj_set_size(timer_overlay_cancel_btn, 120, 40);
-  lv_obj_align(timer_overlay_cancel_btn, LV_ALIGN_BOTTOM_MID, 0, -30);
-  lv_obj_set_style_bg_color(timer_overlay_cancel_btn, lv_color_hex(0x404040), 0);
+  lv_obj_set_size(timer_overlay_cancel_btn, 150, 46);
+  lv_obj_align(timer_overlay_cancel_btn, LV_ALIGN_BOTTOM_MID, 0, -16);
+  lv_obj_set_style_bg_color(timer_overlay_cancel_btn, lv_color_hex(COLOR_BTN_PRIMARY), 0);
   lv_obj_add_event_cb(timer_overlay_cancel_btn, timer_cancel_cb, LV_EVENT_CLICKED, NULL);
   
   lv_obj_t *timer_cancel_label = lv_label_create(timer_overlay_cancel_btn);
   lv_label_set_text(timer_cancel_label, "Cancel");
   lv_obj_set_style_text_color(timer_cancel_label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+  lv_obj_set_style_text_font(timer_cancel_label, &lv_font_montserrat_20, 0);
   lv_obj_center(timer_cancel_label);
 
   // T-Lapse Overlay
@@ -495,39 +497,42 @@ void create_timer_overlays() {
   
   lv_obj_t *tlapse_started_label = lv_label_create(tlapse_overlay);
   lv_label_set_text(tlapse_started_label, "Started");
-  lv_obj_set_style_text_font(tlapse_started_label, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_font(tlapse_started_label, &lv_font_montserrat_24, 0);
   lv_obj_set_style_text_color(tlapse_started_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
-  lv_obj_align(tlapse_started_label, LV_ALIGN_TOP_MID, 0, 40);
+  lv_obj_align(tlapse_started_label, LV_ALIGN_TOP_MID, 0, 24);
   
   tlapse_overlay_time_label = lv_label_create(tlapse_overlay);
   lv_label_set_text(tlapse_overlay_time_label, "02:21");
   lv_obj_set_style_text_font(tlapse_overlay_time_label, &lv_font_montserrat_48, 0);
   lv_obj_set_style_text_color(tlapse_overlay_time_label, lv_color_hex(COLOR_BTN_PRIMARY), 0);
-  lv_obj_align(tlapse_overlay_time_label, LV_ALIGN_CENTER, 0, -40);
+  lv_obj_align(tlapse_overlay_time_label, LV_ALIGN_CENTER, 0, -46);
   
   // T-Lapse Frame Counter (rounded rectangle)
   lv_obj_t *tlapse_frame_container = lv_obj_create(tlapse_overlay);
-  lv_obj_set_size(tlapse_frame_container, 80, 40);
-  lv_obj_align(tlapse_frame_container, LV_ALIGN_CENTER, 0, 20);
-  lv_obj_set_style_bg_color(tlapse_frame_container, lv_color_hex(COLOR_BTN_PRIMARY), 0);
+  lv_obj_set_size(tlapse_frame_container, 96, 50);
+  lv_obj_align(tlapse_frame_container, LV_ALIGN_CENTER, 0, 24);
+  lv_obj_set_style_bg_color(tlapse_frame_container, lv_color_hex(COLOR_BTN_SECONDARY), 0);
   lv_obj_set_style_radius(tlapse_frame_container, 10, 0);
   lv_obj_set_style_border_width(tlapse_frame_container, 0, 0);
+  lv_obj_set_scrollbar_mode(tlapse_frame_container, LV_SCROLLBAR_MODE_OFF);
   
   tlapse_overlay_frame_counter = lv_label_create(tlapse_frame_container);
   lv_label_set_text(tlapse_overlay_frame_counter, "1");
   lv_obj_set_style_text_font(tlapse_overlay_frame_counter, &lv_font_montserrat_20, 0);
-  lv_obj_set_style_text_color(tlapse_overlay_frame_counter, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+  lv_obj_set_style_text_color(tlapse_overlay_frame_counter, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
   lv_obj_center(tlapse_overlay_frame_counter);
   
+
   tlapse_overlay_cancel_btn = lv_btn_create(tlapse_overlay);
-  lv_obj_set_size(tlapse_overlay_cancel_btn, 120, 40);
-  lv_obj_align(tlapse_overlay_cancel_btn, LV_ALIGN_BOTTOM_MID, 0, -30);
-  lv_obj_set_style_bg_color(tlapse_overlay_cancel_btn, lv_color_hex(0x404040), 0);
+  lv_obj_set_size(tlapse_overlay_cancel_btn, 150, 46);
+  lv_obj_align(tlapse_overlay_cancel_btn, LV_ALIGN_BOTTOM_MID, 0, -16);
+  lv_obj_set_style_bg_color(tlapse_overlay_cancel_btn, lv_color_hex(COLOR_BTN_PRIMARY), 0);
   lv_obj_add_event_cb(tlapse_overlay_cancel_btn, tlapse_cancel_cb, LV_EVENT_CLICKED, NULL);
   
   lv_obj_t *tlapse_cancel_label = lv_label_create(tlapse_overlay_cancel_btn);
   lv_label_set_text(tlapse_cancel_label, "Cancel");
   lv_obj_set_style_text_color(tlapse_cancel_label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+  lv_obj_set_style_text_font(tlapse_cancel_label, &lv_font_montserrat_20, 0);
   lv_obj_center(tlapse_cancel_label);
   
   // Interval Overlay
@@ -541,42 +546,47 @@ void create_timer_overlays() {
   
   lv_obj_t *interval_started_label = lv_label_create(interval_overlay);
   lv_label_set_text(interval_started_label, "Started Since");
-  lv_obj_set_style_text_font(interval_started_label, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_font(interval_started_label, &lv_font_montserrat_24, 0);
   lv_obj_set_style_text_color(interval_started_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
-  lv_obj_align(interval_started_label, LV_ALIGN_TOP_MID, 0, 40);
+  lv_obj_align(interval_started_label, LV_ALIGN_TOP_MID, 0, 24);
   
+
   interval_overlay_time_label = lv_label_create(interval_overlay);
   lv_label_set_text(interval_overlay_time_label, "00:00");
   lv_obj_set_style_text_font(interval_overlay_time_label, &lv_font_montserrat_48, 0);
   lv_obj_set_style_text_color(interval_overlay_time_label, lv_color_hex(COLOR_BTN_PRIMARY), 0);
-  lv_obj_align(interval_overlay_time_label, LV_ALIGN_CENTER, 0, -40);
+  lv_obj_align(interval_overlay_time_label, LV_ALIGN_CENTER, 0, -46);
   
+
   // Interval Frame Counter
   lv_obj_t *interval_frame_container = lv_obj_create(interval_overlay);
-  lv_obj_set_size(interval_frame_container, 80, 40);
-  lv_obj_align(interval_frame_container, LV_ALIGN_CENTER, 0, 20);
-  lv_obj_set_style_bg_color(interval_frame_container, lv_color_hex(COLOR_BTN_PRIMARY), 0);
+  lv_obj_set_size(interval_frame_container, 96, 50);
+  lv_obj_align(interval_frame_container, LV_ALIGN_CENTER, 0, 24);
+  lv_obj_set_style_bg_color(interval_frame_container, lv_color_hex(COLOR_BTN_SECONDARY), 0);
   lv_obj_set_style_radius(interval_frame_container, 10, 0);
   lv_obj_set_style_border_width(interval_frame_container, 0, 0);
+  lv_obj_set_scrollbar_mode(interval_frame_container, LV_SCROLLBAR_MODE_OFF);
   
   interval_overlay_frame_counter = lv_label_create(interval_frame_container);
   lv_label_set_text(interval_overlay_frame_counter, "0");
   lv_obj_set_style_text_font(interval_overlay_frame_counter, &lv_font_montserrat_20, 0);
-  lv_obj_set_style_text_color(interval_overlay_frame_counter, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+  lv_obj_set_style_text_color(interval_overlay_frame_counter, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
   lv_obj_center(interval_overlay_frame_counter);
   
   interval_overlay_cancel_btn = lv_btn_create(interval_overlay);
-  lv_obj_set_size(interval_overlay_cancel_btn, 120, 40);
-  lv_obj_align(interval_overlay_cancel_btn, LV_ALIGN_BOTTOM_MID, 0, -30);
-  lv_obj_set_style_bg_color(interval_overlay_cancel_btn, lv_color_hex(0x404040), 0);
+  lv_obj_set_size(interval_overlay_cancel_btn, 150, 46);
+  lv_obj_align(interval_overlay_cancel_btn, LV_ALIGN_BOTTOM_MID, 0, -16);
+  lv_obj_set_style_bg_color(interval_overlay_cancel_btn, lv_color_hex(COLOR_BTN_PRIMARY), 0);
   lv_obj_add_event_cb(interval_overlay_cancel_btn, interval_cancel_cb, LV_EVENT_CLICKED, NULL);
   
   lv_obj_t *interval_cancel_label = lv_label_create(interval_overlay_cancel_btn);
   lv_label_set_text(interval_cancel_label, "Cancel");
   lv_obj_set_style_text_color(interval_cancel_label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+  lv_obj_set_style_text_font(interval_cancel_label, &lv_font_montserrat_20, 0);
   lv_obj_center(interval_cancel_label);
   
   DEBUG_PRINTLN("Timer overlays created successfully!");
+
 }
 
 // =============================================================================
@@ -652,7 +662,7 @@ void update_timer_overlay_display() {
     
     lv_label_set_text(timer_overlay_time_label, timeStr.c_str());
     lv_obj_set_style_text_color(timer_overlay_time_label, lv_color_hex(0x808080), 0);
-    lv_label_set_text(timer_overlay_time_remaining_label, "Servo ON");
+    lv_label_set_text(timer_overlay_time_remaining_label, "HOLD");
   }
 }
 
