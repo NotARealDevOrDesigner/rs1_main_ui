@@ -1,7 +1,6 @@
 /*
 =============================================================================
-timer_system.h - Timer/T-Lapse/Interval System with Servo Control
-TEIL 1 - Kopiere diesen Block komplett in timer_system.h
+timer_system.h - Fixed Timer/T-Lapse/Interval System with Servo Completion
 =============================================================================
 */
 
@@ -17,7 +16,7 @@ TEIL 1 - Kopiere diesen Block komplett in timer_system.h
 // =============================================================================
 #define SERVO_PIN 9
 
-// Timer States
+// Timer States - ERWEITERT für Servo-Completion
 enum TimerExecutionMode {
   TIMER_EXEC_MODE,
   TLAPSE_EXEC_MODE,
@@ -29,10 +28,13 @@ enum TimerExecutionState {
   TIMER_DELAY_RUNNING,
   TIMER_RELEASE_RUNNING,
   TLAPSE_RUNNING,
-  INTERVAL_RUNNING
+  INTERVAL_RUNNING,
+  TIMER_COMPLETING_SERVO,    // NEU: Warten auf Servo-Completion
+  TLAPSE_COMPLETING_SERVO,   // NEU: Warten auf Servo-Completion
+  INTERVAL_COMPLETING_SERVO  // NEU: Warten auf Servo-Completion (falls benötigt)
 };
 
-// Timer Runtime Data
+// Timer Runtime Data - ERWEITERT
 struct TimerRuntime {
   TimerExecutionMode mode;
   TimerExecutionState state;
@@ -45,6 +47,11 @@ struct TimerRuntime {
   int totalFrames;        // for T-Lapse
   int intervalTime;       // for Interval in seconds
   float frameInterval;    // calculated interval between frames for T-Lapse
+  
+  // NEU: Servo completion tracking
+  bool waiting_for_servo_completion;
+  unsigned long servo_completion_timeout;
+  bool logic_completed;   // Logic is done, but servo still moving
 };
 
 // =============================================================================
@@ -57,9 +64,9 @@ bool servo_is_activating = false;
 unsigned long servo_activation_start_time = 0;
 
 // Servo Settings (adjustable)
-extern int servoStartPosition;      // Start position (0-180°)
-extern int servoEndPosition;        // End position (0-180°)
-extern float servoActivationTime;   // Time in seconds for servo activation
+extern int servoStartPosition;      
+extern int servoEndPosition;        
+extern float servoActivationTime;   
 
 // UI Objects for Overlays
 extern lv_obj_t *timer_overlay;
@@ -89,6 +96,7 @@ void timer_system_update();
 void servo_init();
 void servo_activate();
 void servo_move_to_position(int position);
+bool is_servo_completion_needed();
 
 // Timer Execution Functions
 void start_timer_execution();
@@ -128,9 +136,9 @@ Servo cameraServo;
 TimerRuntime runtime;
 
 // Servo Settings (adjustable)
-int servoStartPosition = 0;      // Start position
-int servoEndPosition = 90;       // End position  
-float servoActivationTime = 0.6; // Activation time in seconds
+int servoStartPosition = 0;      
+int servoEndPosition = 90;       
+float servoActivationTime = 0.6; 
 
 // UI Objects Implementation
 lv_obj_t *timer_overlay = nullptr;
@@ -149,30 +157,29 @@ lv_obj_t *interval_overlay_frame_counter = nullptr;
 lv_obj_t *interval_overlay_cancel_btn = nullptr;
 
 // =============================================================================
-// SERVO FUNCTIONS
+// SERVO FUNCTIONS - ERWEITERT
 // =============================================================================
 void servo_init() {
   DEBUG_PRINTLN("Initializing servo...");
   cameraServo.attach(SERVO_PIN);
   servo_move_to_position(servoStartPosition);
-  delay(500); // Allow servo to reach position
-  DEBUG_PRINTF("Servo initialized on pin %d (start: %d°, end: %d°)\n", 
+  delay(500); 
+  DEBUG_PRINTF("Servo initialized on pin %d (start: %dÂ°, end: %dÂ°)\n", 
                SERVO_PIN, servoStartPosition, servoEndPosition);
 }
 
 void servo_move_to_position(int position) {
   position = constrain(position, 0, 180);
   cameraServo.write(position);
-  DEBUG_PRINTF("Servo moved to %d°\n", position);
+  DEBUG_PRINTF("Servo moved to %dÂ°\n", position);
 }
 
 void servo_activate() {
   if (!servo_is_activating) {
-    // Start activation
     servo_is_activating = true;
     servo_activation_start_time = millis();
     servo_move_to_position(servoEndPosition);
-    DEBUG_PRINTF("Servo activation started: %d° -> %d° for %.1fs\n", 
+    DEBUG_PRINTF("Servo activation started: %dÂ° -> %dÂ° for %.1fs\n", 
                  servoStartPosition, servoEndPosition, servoActivationTime);
   }
 }
@@ -181,7 +188,6 @@ void servo_update() {
   if (servo_is_activating) {
     unsigned long elapsed = millis() - servo_activation_start_time;
     if (elapsed >= (servoActivationTime * 1000)) {
-      // Activation time complete - return to start position
       servo_move_to_position(servoStartPosition);
       servo_is_activating = false;
       DEBUG_PRINTLN("Servo activation complete - returned to start position");
@@ -189,16 +195,20 @@ void servo_update() {
   }
 }
 
+// NEU: Check if we need to wait for servo completion
+bool is_servo_completion_needed() {
+  return servo_is_activating || runtime.waiting_for_servo_completion;
+}
+
 // =============================================================================
-// TIMER SYSTEM FUNCTIONS
+// TIMER SYSTEM FUNCTIONS - ERWEITERT
 // =============================================================================
 void timer_system_init() {
   DEBUG_PRINTLN("Initializing timer system...");
   
-  // Initialize servo
   servo_init();
   
-  // Initialize runtime data
+  // Initialize runtime data - ERWEITERT
   runtime.mode = TIMER_EXEC_MODE;
   runtime.state = TIMER_IDLE;
   runtime.startTime = 0;
@@ -211,7 +221,11 @@ void timer_system_init() {
   runtime.intervalTime = 0;
   runtime.frameInterval = 0.0;
   
-  // Create overlays
+  // NEU: Servo completion tracking
+  runtime.waiting_for_servo_completion = false;
+  runtime.servo_completion_timeout = 0;
+  runtime.logic_completed = false;
+  
   create_timer_overlays();
   
   DEBUG_PRINTLN("Timer system initialized successfully!");
@@ -223,6 +237,38 @@ void timer_system_update() {
   
   if (runtime.state == TIMER_IDLE) return;
   
+  // NEU: Handle completion states - wait for servo to finish
+  if (runtime.state == TIMER_COMPLETING_SERVO || 
+      runtime.state == TLAPSE_COMPLETING_SERVO || 
+      runtime.state == INTERVAL_COMPLETING_SERVO) {
+    
+    // Check if servo is done OR timeout reached
+    if (!servo_is_activating || millis() > runtime.servo_completion_timeout) {
+      DEBUG_PRINTLN("Servo completion phase finished");
+      runtime.state = TIMER_IDLE;
+      runtime.waiting_for_servo_completion = false;
+      runtime.logic_completed = false;
+      hide_timer_overlays();
+      show_current_page(); // Return to previous UI state
+      return;
+    }
+    
+    // Continue updating display during completion
+    switch (runtime.mode) {
+      case TIMER_EXEC_MODE:
+        update_timer_overlay_display();
+        break;
+      case TLAPSE_EXEC_MODE:
+        update_tlapse_overlay_display();
+        break;
+      case INTERVAL_EXEC_MODE:
+        update_interval_overlay_display();
+        break;
+    }
+    return;
+  }
+  
+  // Normal execution states
   switch (runtime.mode) {
     case TIMER_EXEC_MODE:
       update_timer_execution();
@@ -239,21 +285,16 @@ void timer_system_update() {
 // =============================================================================
 // TIMER EXECUTION FUNCTIONS
 // =============================================================================
-
-
-
 void start_timer_execution() {
   DEBUG_PRINTLN("Starting Timer execution...");
   
-  // Get current timer values from state machine
-  runtime.totalDelayTime = get_option_value(STATE_TIMER, 0);    // Delay
-  uint32_t releaseValue = get_option_value(STATE_TIMER, 1);     // Release
+  runtime.totalDelayTime = get_option_value(STATE_TIMER, 0);    
+  uint32_t releaseValue = get_option_value(STATE_TIMER, 1);     
   
-  // SICHERE TRIGGER-ERKENNUNG
   bool isTriggerMode = (releaseValue == 4294967295 || (int32_t)releaseValue == -1);
   
   if (isTriggerMode) {
-    runtime.totalReleaseTime = 0; // Trigger = keine Release Zeit
+    runtime.totalReleaseTime = 0; 
     DEBUG_PRINTLN("Timer in TRIGGER mode - single activation after delay");
   } else {
     runtime.totalReleaseTime = releaseValue;
@@ -264,10 +305,9 @@ void start_timer_execution() {
   runtime.startTime = millis();
   runtime.currentPhaseStartTime = millis();
   runtime.frameCount = 0;
+  runtime.logic_completed = false;
   
-  // Servo bleibt in START-Position während Delay
   servo_move_to_position(servoStartPosition);
-  
   show_timer_overlay();
   
   if (isTriggerMode) {
@@ -281,26 +321,23 @@ void start_timer_execution() {
 void start_tlapse_execution() {
   DEBUG_PRINTLN("Starting T-Lapse execution...");
   
-  // Get current T-Lapse values from state machine
-  runtime.totalTime = get_option_value(STATE_TLAPSE, 0);    // Total time
-  runtime.totalFrames = get_option_value(STATE_TLAPSE, 1);  // Frames
+  runtime.totalTime = get_option_value(STATE_TLAPSE, 0);    
+  runtime.totalFrames = get_option_value(STATE_TLAPSE, 1);  
   
   runtime.mode = TLAPSE_EXEC_MODE;
   runtime.state = TLAPSE_RUNNING;
   runtime.startTime = millis();
   runtime.currentPhaseStartTime = millis();
   runtime.frameCount = 0;
+  runtime.logic_completed = false;
   
-  // Calculate interval between frames
   if (runtime.totalFrames > 0) {
     runtime.frameInterval = (float)runtime.totalTime / runtime.totalFrames;
   } else {
-    runtime.frameInterval = 1.0; // Default 1 second if no frames
+    runtime.frameInterval = 1.0; 
   }
   
-  // KORRIGIERT: Servo in Ruheposition lassen zu Beginn
   servo_move_to_position(servoStartPosition);
-  
   show_tlapse_overlay();
   
   DEBUG_PRINTF("T-Lapse started: %ds total, %d frames, %.2fs interval\n", 
@@ -310,18 +347,16 @@ void start_tlapse_execution() {
 void start_interval_execution() {
   DEBUG_PRINTLN("Starting Interval execution...");
   
-  // Get current Interval value from state machine
-  runtime.intervalTime = get_option_value(STATE_INTERVAL, 0);  // Interval
+  runtime.intervalTime = get_option_value(STATE_INTERVAL, 0);  
   
   runtime.mode = INTERVAL_EXEC_MODE;
   runtime.state = INTERVAL_RUNNING;
   runtime.startTime = millis();
   runtime.currentPhaseStartTime = millis();
   runtime.frameCount = 0;
+  runtime.logic_completed = false;
   
-  // KORRIGIERT: Servo in Ruheposition lassen zu Beginn
   servo_move_to_position(servoStartPosition);
-  
   show_interval_overlay();
   
   DEBUG_PRINTF("Interval started: %ds interval\n", runtime.intervalTime);
@@ -332,19 +367,16 @@ void cancel_timer_execution() {
   
   runtime.state = TIMER_IDLE;
   runtime.frameCount = 0;
+  runtime.waiting_for_servo_completion = false;
+  runtime.logic_completed = false;
   
-  // Reset servo to start position
   servo_move_to_position(servoStartPosition);
-  
-  // Hide all overlays
   hide_timer_overlays();
 }
 
 // =============================================================================
-// TIMER UPDATE FUNCTIONS  
+// TIMER UPDATE FUNCTIONS - GEÄNDERT für Completion Handling  
 // =============================================================================
-
-
 void update_timer_execution() {
   unsigned long currentTime = millis();
   unsigned long elapsedTotal = (currentTime - runtime.startTime) / 1000;
@@ -354,19 +386,19 @@ void update_timer_execution() {
     case TIMER_DELAY_RUNNING:
       if (elapsedPhase >= runtime.totalDelayTime) {
         if (runtime.totalReleaseTime == 0) {
-          // TRIGGER MODE: Kurze Aktivierung und fertig
-          servo_activate(); // 0.6s Aktivierung
+          // TRIGGER MODE: Start servo and enter completion state
+          servo_activate(); 
           runtime.frameCount = 1;
-          DEBUG_PRINTLN("Timer: Delay complete, triggered once (Trigger mode), finishing");
-          delay(100); // Kurze Pause damit User die Aktivierung sieht
-          cancel_timer_execution();
-          return;
+          runtime.logic_completed = true;
+          runtime.waiting_for_servo_completion = true;
+          runtime.servo_completion_timeout = millis() + (servoActivationTime * 1000) + 500; // Safety margin
+          runtime.state = TIMER_COMPLETING_SERVO;
+          
+          DEBUG_PRINTLN("Timer: Delay complete, triggered once (Trigger mode), waiting for servo completion");
         } else {
-          // NEUE LOGIK: NORMALE RELEASE - Servo für GESAMTE Release-Dauer aktivieren
+          // RELEASE MODE
           runtime.state = TIMER_RELEASE_RUNNING;
           runtime.currentPhaseStartTime = millis();
-          
-          // Servo auf END-Position für die gesamte Release-Dauer
           servo_move_to_position(servoEndPosition);
           runtime.frameCount = 1;
           
@@ -378,10 +410,10 @@ void update_timer_execution() {
       
     case TIMER_RELEASE_RUNNING:
       if (elapsedPhase >= runtime.totalReleaseTime) {
-        // RELEASE COMPLETE: Servo zurück zur Start-Position
         servo_move_to_position(servoStartPosition);
         DEBUG_PRINTLN("Timer execution complete - servo returned to start position");
         cancel_timer_execution();
+        show_current_page(); // Return to UI
         return;
       }
       break;
@@ -394,23 +426,35 @@ void update_tlapse_execution() {
   unsigned long currentTime = millis();
   unsigned long elapsedTotal = (currentTime - runtime.startTime) / 1000;
   
-  // KORRIGIERT: Berechne welcher Frame jetzt fällig ist
   int expectedFrames = (int)(elapsedTotal / runtime.frameInterval);
   
-  // KORRIGIERT: Prüfe ob genug Zeit vergangen ist für nächsten Frame
+  // Trigger frame if needed
   if (expectedFrames > runtime.frameCount && runtime.frameCount < runtime.totalFrames) {
-    // KORRIGIERT: Frame erst nach dem berechneten Interval auslösen
     servo_activate();
     runtime.frameCount++;
     DEBUG_PRINTF("T-Lapse: Frame %d/%d triggered after %.1fs\n", 
-                 runtime.frameCount, runtime.totalFrames, elapsedTotal);
+                 runtime.frameCount, runtime.totalFrames, (float)elapsedTotal);
   }
   
-  // Check if T-Lapse is complete
-  if (elapsedTotal >= runtime.totalTime || runtime.frameCount >= runtime.totalFrames) {
-    DEBUG_PRINTF("T-Lapse execution complete: %d frames taken\n", runtime.frameCount);
-    cancel_timer_execution();
-    return;
+  // Check if T-Lapse logic is complete
+  if ((elapsedTotal >= runtime.totalTime || runtime.frameCount >= runtime.totalFrames) && 
+      !runtime.logic_completed) {
+    
+    runtime.logic_completed = true;
+    DEBUG_PRINTF("T-Lapse logic complete: %d frames taken\n", runtime.frameCount);
+    
+    // NEU: Check if we need to wait for servo completion
+    if (is_servo_completion_needed()) {
+      runtime.waiting_for_servo_completion = true;
+      runtime.servo_completion_timeout = millis() + (servoActivationTime * 1000) + 500;
+      runtime.state = TLAPSE_COMPLETING_SERVO;
+      DEBUG_PRINTLN("T-Lapse waiting for final servo completion");
+    } else {
+      // No servo running, complete immediately
+      cancel_timer_execution();
+      show_current_page();
+      return;
+    }
   }
   
   update_tlapse_overlay_display();
@@ -420,12 +464,10 @@ void update_interval_execution() {
   unsigned long currentTime = millis();
   unsigned long elapsedPhase = (currentTime - runtime.currentPhaseStartTime) / 1000;
   
-  // KORRIGIERT: Erst NACH dem Interval auslösen
   if (elapsedPhase >= runtime.intervalTime) {
-    // KORRIGIERT: Interval Zeit abgelaufen - jetzt auslösen
     servo_activate();
     runtime.frameCount++;
-    runtime.currentPhaseStartTime = millis(); // Reset for next interval
+    runtime.currentPhaseStartTime = millis(); 
     
     DEBUG_PRINTF("Interval: Frame %d triggered after %ds interval\n", 
                  runtime.frameCount, runtime.intervalTime);
@@ -434,10 +476,8 @@ void update_interval_execution() {
   update_interval_overlay_display();
 }
 
-
-
 // =============================================================================
-// OVERLAY FUNCTIONS - TIMER OVERLAY
+// OVERLAY FUNCTIONS - VOLLSTÄNDIG
 // =============================================================================
 void create_timer_overlays() {
   DEBUG_PRINTLN("Creating timer overlays...");
@@ -451,29 +491,24 @@ void create_timer_overlays() {
   lv_obj_add_flag(timer_overlay, LV_OBJ_FLAG_HIDDEN);
   lv_obj_clear_flag(timer_overlay, LV_OBJ_FLAG_SCROLLABLE);
   
-  // Timer Overlay - Time Left Label
   lv_obj_t *timer_time_left_label = lv_label_create(timer_overlay);
   lv_label_set_text(timer_time_left_label, "Time left");
   lv_obj_set_style_text_font(timer_time_left_label, &lv_font_montserrat_24, 0);
   lv_obj_set_style_text_color(timer_time_left_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
   lv_obj_align(timer_time_left_label, LV_ALIGN_TOP_MID, 0, 40);
   
-  // Timer Overlay - Main Time Display
   timer_overlay_time_label = lv_label_create(timer_overlay);
   lv_label_set_text(timer_overlay_time_label, "00:15");
   lv_obj_set_style_text_font(timer_overlay_time_label, &lv_font_montserrat_48, 0);
   lv_obj_set_style_text_color(timer_overlay_time_label, lv_color_hex(COLOR_BTN_PRIMARY), 0);
   lv_obj_align(timer_overlay_time_label, LV_ALIGN_CENTER, 0, -20);
   
-  // Timer Overlay - Remaining Time (for release phase)
   timer_overlay_time_remaining_label = lv_label_create(timer_overlay);
   lv_label_set_text(timer_overlay_time_remaining_label, "");
   lv_obj_set_style_text_font(timer_overlay_time_remaining_label, &lv_font_montserrat_20, 0);
   lv_obj_set_style_text_color(timer_overlay_time_remaining_label, lv_color_hex(0x808080), 0);
   lv_obj_align(timer_overlay_time_remaining_label, LV_ALIGN_CENTER, 0, 38);
   
- 
-  // Timer Overlay - Cancel Button
   timer_overlay_cancel_btn = lv_btn_create(timer_overlay);
   lv_obj_set_size(timer_overlay_cancel_btn, 150, 46);
   lv_obj_align(timer_overlay_cancel_btn, LV_ALIGN_BOTTOM_MID, 0, -16);
@@ -522,7 +557,6 @@ void create_timer_overlays() {
   lv_obj_set_style_text_color(tlapse_overlay_frame_counter, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
   lv_obj_center(tlapse_overlay_frame_counter);
   
-
   tlapse_overlay_cancel_btn = lv_btn_create(tlapse_overlay);
   lv_obj_set_size(tlapse_overlay_cancel_btn, 150, 46);
   lv_obj_align(tlapse_overlay_cancel_btn, LV_ALIGN_BOTTOM_MID, 0, -16);
@@ -550,14 +584,12 @@ void create_timer_overlays() {
   lv_obj_set_style_text_color(interval_started_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
   lv_obj_align(interval_started_label, LV_ALIGN_TOP_MID, 0, 24);
   
-
   interval_overlay_time_label = lv_label_create(interval_overlay);
   lv_label_set_text(interval_overlay_time_label, "00:00");
   lv_obj_set_style_text_font(interval_overlay_time_label, &lv_font_montserrat_48, 0);
   lv_obj_set_style_text_color(interval_overlay_time_label, lv_color_hex(COLOR_BTN_PRIMARY), 0);
   lv_obj_align(interval_overlay_time_label, LV_ALIGN_CENTER, 0, -46);
   
-
   // Interval Frame Counter
   lv_obj_t *interval_frame_container = lv_obj_create(interval_overlay);
   lv_obj_set_size(interval_frame_container, 96, 50);
@@ -586,12 +618,9 @@ void create_timer_overlays() {
   lv_obj_center(interval_cancel_label);
   
   DEBUG_PRINTLN("Timer overlays created successfully!");
-
 }
 
-// =============================================================================
-// OVERLAY MANAGEMENT
-// =============================================================================
+// Overlay Management
 void show_timer_overlay() {
   hide_timer_overlays();
   lv_obj_clear_flag(timer_overlay, LV_OBJ_FLAG_HIDDEN);
@@ -617,16 +646,22 @@ void hide_timer_overlays() {
 }
 
 // =============================================================================
-// OVERLAY UPDATE FUNCTIONS
+// OVERLAY UPDATE FUNCTIONS - GEÄNDERT für Completion States
 // =============================================================================
-
 void update_timer_overlay_display() {
   unsigned long currentTime = millis();
   unsigned long elapsedTotal = (currentTime - runtime.startTime) / 1000;
   unsigned long elapsedPhase = (currentTime - runtime.currentPhaseStartTime) / 1000;
   
+  if (runtime.state == TIMER_COMPLETING_SERVO) {
+    // NEU: During servo completion - show completion message
+    lv_label_set_text(timer_overlay_time_label, "SHOT");
+    lv_obj_set_style_text_color(timer_overlay_time_label, lv_color_hex(COLOR_BTN_SUCCESS), 0);
+    lv_label_set_text(timer_overlay_time_remaining_label, "Completing...");
+    return;
+  }
+  
   if (runtime.state == TIMER_DELAY_RUNNING) {
-    // During delay: show delay countdown in primary color
     int remaining = runtime.totalDelayTime - elapsedPhase;
     if (remaining < 0) remaining = 0;
     
@@ -638,7 +673,6 @@ void update_timer_overlay_display() {
     lv_label_set_text(timer_overlay_time_label, timeStr.c_str());
     lv_obj_set_style_text_color(timer_overlay_time_label, lv_color_hex(COLOR_BTN_PRIMARY), 0);
     
-    // ANGEPASST: Zeige Release Info basierend auf Modus
     if (runtime.totalReleaseTime > 0) {
       int releaseMin = runtime.totalReleaseTime / 60;
       int releaseSec = runtime.totalReleaseTime % 60;
@@ -646,12 +680,10 @@ void update_timer_overlay_display() {
                          (releaseSec < 10 ? "0" : "") + String(releaseSec);
       lv_label_set_text(timer_overlay_time_remaining_label, releaseStr.c_str());
     } else {
-      // Trigger Mode
       lv_label_set_text(timer_overlay_time_remaining_label, "SHOT");
     }
   } 
   else if (runtime.state == TIMER_RELEASE_RUNNING) {
-    // During release: show release countdown in light gray
     int remaining = runtime.totalReleaseTime - elapsedPhase;
     if (remaining < 0) remaining = 0;
     
@@ -670,15 +702,13 @@ void update_tlapse_overlay_display() {
   unsigned long currentTime = millis();
   unsigned long elapsedTotal = (currentTime - runtime.startTime) / 1000;
   
-  // Show elapsed time in primary color
+  // Normale Anzeige auch während Completion - keine visuellen Änderungen
   int minutes = elapsedTotal / 60;
   int seconds = elapsedTotal % 60;
   String timeStr = (minutes < 10 ? "0" : "") + String(minutes) + ":" + 
                    (seconds < 10 ? "0" : "") + String(seconds);
   
   lv_label_set_text(tlapse_overlay_time_label, timeStr.c_str());
-  
-  // Update frame counter
   lv_label_set_text(tlapse_overlay_frame_counter, String(runtime.frameCount).c_str());
 }
 
@@ -686,15 +716,13 @@ void update_interval_overlay_display() {
   unsigned long currentTime = millis();
   unsigned long elapsedTotal = (currentTime - runtime.startTime) / 1000;
   
-  // Show elapsed time in primary color
+  // Normale Anzeige auch während Completion - keine visuellen Änderungen
   int minutes = elapsedTotal / 60;
   int seconds = elapsedTotal % 60;
   String timeStr = (minutes < 10 ? "0" : "") + String(minutes) + ":" + 
                    (seconds < 10 ? "0" : "") + String(seconds);
   
   lv_label_set_text(interval_overlay_time_label, timeStr.c_str());
-  
-  // Update frame counter
   lv_label_set_text(interval_overlay_frame_counter, String(runtime.frameCount).c_str());
 }
 
@@ -705,7 +733,6 @@ void timer_cancel_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
     DEBUG_PRINTLN("Timer cancelled by user");
     cancel_timer_execution();
-    // Return to previous state
     show_current_page();
   }
 }
@@ -714,7 +741,6 @@ void tlapse_cancel_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
     DEBUG_PRINTLN("T-Lapse cancelled by user");
     cancel_timer_execution();
-    // Return to previous state
     show_current_page();
   }
 }
@@ -723,7 +749,6 @@ void interval_cancel_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
     DEBUG_PRINTLN("Interval cancelled by user");
     cancel_timer_execution();
-    // Return to previous state
     show_current_page();
   }
 }

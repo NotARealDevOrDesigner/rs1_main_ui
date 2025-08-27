@@ -1,6 +1,6 @@
 /*
 =============================================================================
-ui.h - Complete User Interface System with Interval Single Card
+ui.h - Simplified UI System (Main → Sub, no Detail pages)
 =============================================================================
 */
 
@@ -13,6 +13,7 @@ ui.h - Complete User Interface System with Interval Single Card
 #include "images.h"
 #include "battery.h"
 #include "timer_system.h"
+
 // =============================================================================
 // STRUCTURES
 // =============================================================================
@@ -58,7 +59,7 @@ lv_obj_t *main_dot1, *main_dot2, *main_dot3, *main_dot4;
 // Battery widgets
 lv_obj_t *main_battery_widget;
 lv_obj_t *template_battery_widget;
-lv_obj_t *detail_battery_widget;
+lv_obj_t *interval_battery_widget;
 
 // Main page state
 int main_current_card = 0;
@@ -83,12 +84,6 @@ lv_obj_t *interval_single_btn;
 lv_obj_t *interval_single_label;
 lv_obj_t *interval_single_time;
 lv_obj_t *interval_start_btn;
-lv_obj_t *interval_battery_widget;
-
-// Detail page objects
-lv_obj_t *detail_page;
-lv_obj_t *detail_header_label;
-lv_obj_t *detail_content_label;
 
 // Popup objects
 lv_obj_t *popup_overlay;
@@ -107,7 +102,6 @@ void create_loading_page();
 void create_main_page();
 void create_template_page();
 void create_interval_page();
-void create_detail_page();
 void create_popup();
 
 // Loading screen functions
@@ -135,18 +129,14 @@ void update_template_dots(int active_index);
 void animate_to_option(int target_option);
 void anim_complete_cb(lv_anim_t *a);
 
-// Event callbacks
+// Event callbacks - SIMPLIFIED (no detail callbacks)
 void main_card_cb(lv_event_t *e);
 void main_swipe_cb(lv_event_t *e);
 void template_back_cb(lv_event_t *e);
-void template_option1_cb(lv_event_t *e);
-void template_option2_cb(lv_event_t *e);
 void template_start_cb(lv_event_t *e);
 void template_swipe_cb(lv_event_t *e);
 void interval_back_cb(lv_event_t *e);
-void interval_single_cb(lv_event_t *e);
 void interval_start_cb(lv_event_t *e);
-void detail_back_cb(lv_event_t *e);
 void popup_close_cb(lv_event_t *e);
 
 // =============================================================================
@@ -200,7 +190,7 @@ void create_loading_page() {
 
   DEBUG_PRINTLN("Loading screen created");
 }
-/*
+
 lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back_btn) {
   lv_obj_t *header = lv_obj_create(parent);
   lv_obj_set_size(header, lv_pct(100), 50);
@@ -210,98 +200,32 @@ lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back
   lv_obj_set_style_pad_all(header, 0, 0);
 
   if (show_back_btn) {
-    // Container für Back-Button ohne Hintergrund
     lv_obj_t *back_container = lv_obj_create(header);
     lv_obj_set_size(back_container, 80, 30);
     lv_obj_align(back_container, LV_ALIGN_LEFT_MID, 10, 0);
-    lv_obj_set_style_bg_opa(back_container, LV_OPA_TRANSP, 0); // Transparenter Hintergrund
+    lv_obj_set_style_bg_opa(back_container, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(back_container, 0, 0);
     lv_obj_set_style_pad_all(back_container, 0, 0);
     lv_obj_clear_flag(back_container, LV_OBJ_FLAG_SCROLLABLE);
     
     // Event Handler für den Container hinzufügen
-    if (strcmp(title, "Detail") == 0) {
-      lv_obj_add_event_cb(back_container, detail_back_cb, LV_EVENT_CLICKED, NULL);
-    } else if (strcmp(title, "Interval") == 0) {
+    if (strcmp(title, "Interval") == 0) {
       lv_obj_add_event_cb(back_container, interval_back_cb, LV_EVENT_CLICKED, NULL);
     } else {
       lv_obj_add_event_cb(back_container, template_back_cb, LV_EVENT_CLICKED, NULL);
     }
     
-    // Pfeil-Symbol (Unicode)
-    lv_obj_t *arrow_icon = lv_img_create(back_container);
-    lv_img_set_src(arrow_icon, &icon_back); // Hier Ihr Icon-Name
-    lv_obj_align(arrow_icon, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_set_style_img_recolor(arrow_icon, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
-    lv_obj_set_style_img_recolor_opa(arrow_icon, LV_OPA_COVER, 0);
-
-    
-    lv_obj_t *arrow_label = lv_label_create(back_container);
-    lv_label_set_text(arrow_label, "<"); // Unicode left-pointing angle bracket
-    lv_obj_set_style_text_font(arrow_label, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(arrow_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(arrow_label, LV_ALIGN_LEFT_MID, 0, 0);
-    
-
-    // "Back" Text
-    lv_obj_t *back_label = lv_label_create(back_container);
-    lv_label_set_text(back_label, "Back");
-    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(back_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(back_label, LV_ALIGN_LEFT_MID, 20, 0); // 20px Abstand vom Pfeil
-  }
-  
-  lv_obj_t *title_label = lv_label_create(header);
-  lv_label_set_text(title_label, title);
-  lv_obj_set_style_text_font(title_label, &lv_font_montserrat_16, 0);
-  lv_obj_set_style_text_color(title_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
-  lv_obj_align(title_label, LV_ALIGN_CENTER, 0, 0);
-  
-  lv_obj_t *battery_widget = create_battery_widget(header, 118, 12);
-  
-  return header;
-}
-*/
-lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back_btn) {
-  lv_obj_t *header = lv_obj_create(parent);
-  lv_obj_set_size(header, lv_pct(100), 50);
-  lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 8);
-  lv_obj_set_style_bg_color(header, lv_color_hex(COLOR_BG_HEADER), 0);
-  lv_obj_set_style_border_width(header, 0, 0);
-  lv_obj_set_style_pad_all(header, 0, 0);
-
-  if (show_back_btn) {
-    // Container für Back-Button ohne Hintergrund
-    lv_obj_t *back_container = lv_obj_create(header);
-    lv_obj_set_size(back_container, 80, 30);
-    lv_obj_align(back_container, LV_ALIGN_LEFT_MID, 10, 0);
-    lv_obj_set_style_bg_opa(back_container, LV_OPA_TRANSP, 0); // Transparenter Hintergrund
-    lv_obj_set_style_border_width(back_container, 0, 0);
-    lv_obj_set_style_pad_all(back_container, 0, 0);
-    lv_obj_clear_flag(back_container, LV_OBJ_FLAG_SCROLLABLE);
-    
-    // Event Handler für den Container hinzufügen
-    if (strcmp(title, "Detail") == 0) {
-      lv_obj_add_event_cb(back_container, detail_back_cb, LV_EVENT_CLICKED, NULL);
-    } else if (strcmp(title, "Interval") == 0) {
-      lv_obj_add_event_cb(back_container, interval_back_cb, LV_EVENT_CLICKED, NULL);
-    } else {
-      lv_obj_add_event_cb(back_container, template_back_cb, LV_EVENT_CLICKED, NULL);
-    }
-    
-    // Pfeil-Symbol
     lv_obj_t *arrow_icon = lv_img_create(back_container);
     lv_img_set_src(arrow_icon, &icon_back);
     lv_obj_align(arrow_icon, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_set_style_img_recolor(arrow_icon, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
     lv_obj_set_style_img_recolor_opa(arrow_icon, LV_OPA_COVER, 0);
 
-    // "Back" Text
     lv_obj_t *back_label = lv_label_create(back_container);
     lv_label_set_text(back_label, "Back");
     lv_obj_set_style_text_font(back_label, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(back_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
-    lv_obj_align(back_label, LV_ALIGN_LEFT_MID, 20, 0); // 20px Abstand vom Pfeil
+    lv_obj_align(back_label, LV_ALIGN_LEFT_MID, 20, 0);
   }
   
   lv_obj_t *title_label = lv_label_create(header);
@@ -310,14 +234,11 @@ lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back
   lv_obj_set_style_text_color(title_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
   lv_obj_align(title_label, LV_ALIGN_CENTER, 0, 0);
   
-  // FIX: Adjust battery widget position based on back button presence
   lv_obj_t *battery_widget;
   if (show_back_btn) {
-    // When back button is present, position battery widget more precisely
-    battery_widget = create_battery_widget(header, 128, 12); // Slightly adjust X position
+    battery_widget = create_battery_widget(header, 128, 12);
   } else {
-    // Main page positioning (no back button)
-    battery_widget = create_battery_widget(header, 118, 12); // Original position
+    battery_widget = create_battery_widget(header, 118, 12);
   }
   
   return header;
@@ -332,9 +253,6 @@ void update_all_battery_widgets() {
   }
   if (interval_battery_widget) {
     update_battery_widget(interval_battery_widget);
-  }
-  if (detail_battery_widget) {
-    update_battery_widget(detail_battery_widget);
   }
 }
 
@@ -436,6 +354,9 @@ lv_obj_t* create_main_card(lv_obj_t *parent, MainCard card_data, int initial_x) 
   lv_obj_set_style_bg_color(icon_bg, lv_color_hex(0x505050), 0);
   lv_obj_set_style_border_width(icon_bg, 0, 0);
   lv_obj_set_style_radius(icon_bg, 43, 0);
+  // FIX: Make icon background non-clickable
+  lv_obj_add_flag(icon_bg, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_clear_flag(icon_bg, LV_OBJ_FLAG_CLICKABLE);
 
   lv_obj_t *icon = lv_img_create(icon_bg);
   lv_img_set_src(icon, card_data.icon_img);
@@ -443,12 +364,16 @@ lv_obj_t* create_main_card(lv_obj_t *parent, MainCard card_data, int initial_x) 
   
   lv_obj_set_style_img_recolor(icon, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
   lv_obj_set_style_img_recolor_opa(icon, LV_OPA_COVER, 0);
+  // FIX: Make icon non-clickable
+  lv_obj_clear_flag(icon, LV_OBJ_FLAG_CLICKABLE);
 
   lv_obj_t *title = lv_label_create(card);
   lv_label_set_text(title, card_data.title.c_str());
   lv_obj_set_style_text_font(title, &lv_font_montserrat_28, 0);
   lv_obj_set_style_text_color(title, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
   lv_obj_align(title, LV_ALIGN_BOTTOM_MID, 0, -18);
+  // FIX: Make title label non-clickable
+  lv_obj_clear_flag(title, LV_OBJ_FLAG_CLICKABLE);
   
   return card;
 }
@@ -556,7 +481,6 @@ void anim_complete_cb(lv_anim_t *a) {
 }
 
 void animate_to_option(int target_option) {
-  // Only animate on Timer/T-Lapse pages, not Interval
   if (app_state.current_state == STATE_INTERVAL) {
     return; // Interval has no animation
   }
@@ -595,7 +519,6 @@ static lv_coord_t start_x = 0;
 static bool touch_started = false;
 
 void template_swipe_cb(lv_event_t *e) {
-  // Only handle swipe for Timer/T-Lapse, not Interval
   if (app_state.current_state == STATE_INTERVAL) {
     return; // Interval has no swipe functionality
   }
@@ -654,7 +577,7 @@ void create_template_page() {
   lv_obj_set_pos(template_option1_btn, 0, 5);
   lv_obj_set_style_bg_color(template_option1_btn, lv_color_hex(COLOR_BTN_SECONDARY), 0);
   lv_obj_set_style_radius(template_option1_btn, 8, 0);
-  lv_obj_add_event_cb(template_option1_btn, template_option1_cb, LV_EVENT_CLICKED, NULL);
+  // REMOVED: No event callback - cards are no longer clickable
   lv_obj_clear_flag(template_option1_btn, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *option1_container = lv_obj_create(template_option1_btn);
@@ -679,7 +602,7 @@ void create_template_page() {
   lv_obj_set_pos(template_option2_btn, 155, 10);
   lv_obj_set_style_bg_color(template_option2_btn, lv_color_hex(COLOR_BTN_SECONDARY), 0);
   lv_obj_set_style_radius(template_option2_btn, 8, 0);
-  lv_obj_add_event_cb(template_option2_btn, template_option2_cb, LV_EVENT_CLICKED, NULL);
+  // REMOVED: No event callback - cards are no longer clickable
   lv_obj_clear_flag(template_option2_btn, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *option2_container = lv_obj_create(template_option2_btn);
@@ -765,7 +688,7 @@ void create_interval_page() {
   lv_obj_set_pos(interval_single_btn, 4, 6);
   lv_obj_set_style_bg_color(interval_single_btn, lv_color_hex(COLOR_BTN_SECONDARY), 0);
   lv_obj_set_style_radius(interval_single_btn, 8, 0);
-  lv_obj_add_event_cb(interval_single_btn, interval_single_cb, LV_EVENT_CLICKED, NULL);
+  // REMOVED: No event callback - card is no longer clickable
   lv_obj_clear_flag(interval_single_btn, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t *single_container = lv_obj_create(interval_single_btn);
@@ -795,27 +718,6 @@ void create_interval_page() {
   lv_obj_set_style_text_color(interval_start_label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
   lv_obj_set_style_text_font(interval_start_label, &lv_font_montserrat_20, 0);
   lv_obj_center(interval_start_label);
-}
-
-void create_detail_page() {
-  detail_page = lv_obj_create(lv_scr_act());
-  lv_obj_set_size(detail_page, lv_pct(100), lv_pct(100));
-  lv_obj_set_style_bg_color(detail_page, lv_color_hex(COLOR_BG_DETAIL), 0);
-  lv_obj_set_style_border_width(detail_page, 0, 0);
-  lv_obj_set_style_pad_all(detail_page, 0, 0);
-  lv_obj_add_flag(detail_page, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_set_scrollbar_mode(detail_page, LV_SCROLLBAR_MODE_OFF);
-  lv_obj_clear_flag(detail_page, LV_OBJ_FLAG_SCROLLABLE);
-
-  lv_obj_t *detail_header = create_page_header(detail_page, "", true);
-  detail_header_label = lv_obj_get_child(detail_header, 1);
-  detail_battery_widget = lv_obj_get_child(detail_header, 2);
-
-  detail_content_label = lv_label_create(detail_page);
-  lv_label_set_text(detail_content_label, "Placeholder Content");
-  lv_obj_set_style_text_font(detail_content_label, &lv_font_montserrat_14, 0);
-  lv_obj_set_style_text_color(detail_content_label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
-  lv_obj_align(detail_content_label, LV_ALIGN_CENTER, 0, 0);
 }
 
 void create_popup() {
@@ -857,7 +759,7 @@ void create_popup() {
   lv_obj_center(close_label);
 }
 
-// Event callbacks
+// Event callbacks - SIMPLIFIED (removed detail navigation)
 void main_card_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED && !main_is_animating) {
     lv_obj_t *clicked_card = lv_event_get_target(e);
@@ -886,29 +788,11 @@ void template_back_cb(lv_event_t *e) {
   }
 }
 
-void template_option1_cb(lv_event_t *e) {
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED && !app_state.is_animating) {
-    DEBUG_PRINTLN("Option 1 clicked");
-    app_state.detail_context = get_detail_context();
-    change_state(STATE_DETAIL);
-    show_current_page();
-  }
-}
-
-void template_option2_cb(lv_event_t *e) {
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED && !app_state.is_animating) {
-    DEBUG_PRINTLN("Option 2 clicked");
-    app_state.detail_context = get_detail_context();
-    change_state(STATE_DETAIL);
-    show_current_page();
-  }
-}
-
 void template_start_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
     DEBUG_PRINTLN("Start button pressed");
     
-    // Bestimme welcher Modus basierend auf aktuellem State
+    // Start timer based on current state
     switch (app_state.current_state) {
       case STATE_TIMER:
         start_timer_execution();
@@ -923,14 +807,6 @@ void template_start_cb(lv_event_t *e) {
   }
 }
 
-/*
-void template_start_cb(lv_event_t *e) {
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-    DEBUG_PRINTLN("Start button pressed");
-    lv_obj_clear_flag(popup_overlay, LV_OBJ_FLAG_HIDDEN);
-  }
-}
-*/
 void interval_back_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
     DEBUG_PRINTLN("Interval back pressed");
@@ -938,33 +814,10 @@ void interval_back_cb(lv_event_t *e) {
   }
 }
 
-void interval_single_cb(lv_event_t *e) {
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-    DEBUG_PRINTLN("Interval single card clicked");
-    app_state.detail_context = get_detail_context();
-    change_state(STATE_DETAIL);
-    show_current_page();
-  }
-}
-
 void interval_start_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
     DEBUG_PRINTLN("Interval start button pressed");
     start_interval_execution();
-  }
-}
-/*
-void interval_start_cb(lv_event_t *e) {
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-    DEBUG_PRINTLN("Interval start button pressed");
-    lv_obj_clear_flag(popup_overlay, LV_OBJ_FLAG_HIDDEN);
-  }
-}
-*/
-void detail_back_cb(lv_event_t *e) {
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-    DEBUG_PRINTLN("Detail back pressed");
-    go_back();
   }
 }
 
@@ -980,30 +833,24 @@ void hide_all_pages() {
   lv_obj_add_flag(main_page, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(template_page, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(interval_page, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_add_flag(detail_page, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(loading_page, LV_OBJ_FLAG_HIDDEN);
 }
 
 void update_template_content(PageContent content) {
-  // Update the labels but DON'T reset positions or current_option
-  //lv_label_set_text(template_header_label, content.heading.c_str());
+  // Update labels but keep current option unchanged for encoder functionality
   lv_label_set_text(template_option1_label, content.option1_text.c_str());
   lv_label_set_text(template_option2_label, content.option2_text.c_str());
   lv_label_set_text(template_option1_time, content.option1_time.c_str());
   lv_label_set_text(template_option2_time, content.option2_time.c_str());
   
-  // DON'T reset current_option or card positions when just updating values!
-  // This was causing the cards to jump back to option 0
-  
-  // Only update dots to reflect current state
+  // Update dots to reflect current state
   update_template_dots(app_state.current_option);
   
   DEBUG_PRINTF("Template content updated - keeping current option: %d\n", app_state.current_option);
 }
 
 void init_template_content(PageContent content) {
-  // This function is used when first showing a page - resets positions
-  //lv_label_set_text(template_header_label, content.heading.c_str());
+  // Initialize page with reset positions
   lv_label_set_text(template_option1_label, content.option1_text.c_str());
   lv_label_set_text(template_option2_label, content.option2_text.c_str());
   lv_label_set_text(template_option1_time, content.option1_time.c_str());
@@ -1019,18 +866,8 @@ void init_template_content(PageContent content) {
 }
 
 void update_interval_content(PageContent content) {
-  //lv_label_set_text(interval_header_label, content.heading.c_str());
   lv_label_set_text(interval_single_label, content.option1_text.c_str());
   lv_label_set_text(interval_single_time, content.option1_time.c_str());
-}
-
-// Function to refresh UI when values change
-void refresh_current_page_ui() {
-  if (app_state.current_state == STATE_INTERVAL) {
-    update_interval_content(interval_content);
-  } else if (is_main_template_state(app_state.current_state)) {
-    update_template_content(get_current_content());
-  }
 }
 
 void show_current_page() {
@@ -1051,42 +888,34 @@ void show_current_page() {
       break;
       
     case STATE_TIMER:
-      init_template_content(timer_content);  // Reset positions when showing page
+      init_template_content(timer_content);
       lv_obj_clear_flag(template_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing timer template");
       break;
       
     case STATE_TLAPSE:
-      init_template_content(tlapse_content);  // Reset positions when showing page
+      init_template_content(tlapse_content);
       lv_obj_clear_flag(template_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing time-lapse template");
       break;
       
     case STATE_INTERVAL:
-      app_state.current_option = 0; // Interval hat immer nur Option 0
+      app_state.current_option = 0; // Interval has only option 0
       update_interval_content(interval_content);
       lv_obj_clear_flag(interval_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing interval page (single card)");
       break;
-      
-    case STATE_DETAIL: {
-      lv_label_set_text(detail_header_label, "Detail");
-      String heading = get_detail_heading();
-      update_dynamic_text(heading + " - Detail Configuration");
-      lv_label_set_text(detail_content_label, app_state.dynamic_text.c_str());
-      lv_obj_clear_flag(detail_page, LV_OBJ_FLAG_HIDDEN);
-      DEBUG_PRINTLN("Showing detail page for: " + heading);
-      break;
-    }
       
     case STATE_SETTINGS:
       DEBUG_PRINTLN("Settings not implemented");
       change_state(STATE_MAIN);
       show_current_page();
       break;
+      
+    // REMOVED: STATE_DETAIL case - no more detail pages
   }
   
-  // Battery widgets in allen aktiven Pages updaten (außer Loading)
+  // Update battery widgets in all active pages (except Loading)
   if (app_state.current_state != STATE_LOADING) {
     update_all_battery_widgets();
   }
@@ -1095,7 +924,7 @@ void show_current_page() {
 void ui_init() {
   DEBUG_PRINTLN("Initializing UI...");
   
-  // Battery System initialisieren (nur wenn nicht im Loading State)
+  // Battery System initialization
   if (app_state.current_state != STATE_LOADING) {
     battery_init();
   }
@@ -1106,10 +935,9 @@ void ui_init() {
   }
   
   create_main_page();
-  create_template_page();      // Für Timer/T-Lapse (2 Karten)
-  create_interval_page();      // Neue separate Interval Seite (1 Karte)
-  create_detail_page();
-  create_popup();
+  create_template_page();      // For Timer/T-Lapse (2 cards)
+  create_interval_page();      // Separate Interval page (1 card)
+  create_popup();              // REMOVED: create_detail_page()
   timer_system_init();
   
   // Initialize battery system after UI creation if not in loading
@@ -1120,6 +948,7 @@ void ui_init() {
   show_current_page();
   
   DEBUG_PRINTLN("UI initialized successfully!");
+  DEBUG_PRINTLN("Navigation: Main → Timer/T-Lapse/Interval (no detail subsites)");
 }
 
 #endif // UI_H

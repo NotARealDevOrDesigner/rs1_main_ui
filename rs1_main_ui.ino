@@ -1,28 +1,16 @@
 /*
 =============================================================================
-ESP32-C6 Camera Control App - Main Application with Rotary Encoder Support
-=============================================================================
-
-File Structure:
-- config.h         : Hardware configuration & constants (with encoder config)
-- state_machine.h  : State management system (with value storage)
-- hardware.h       : Hardware abstraction layer (with encoder support)
-- ui.h            : User interface system with battery & loading screen
-- images.h        : Icons system
-- battery.h       : Complete battery management system
-- main.ino        : Main application (this file)
-
+ESP32-C6 Camera Control App - Main Application (Fixed without Detail)
 =============================================================================
 */
-
-//test
 
 #include "config.h"
 #include "state_machine.h"
 #include "hardware.h"
 #include "ui.h"
-#include "battery.h"  // Battery management system
+#include "battery.h"
 #include "timer_system.h" 
+
 // =============================================================================
 // ROTARY ENCODER HANDLING
 // =============================================================================
@@ -41,7 +29,7 @@ void handle_encoder_input() {
     }
     else if (is_main_template_state(app_state.current_state) && !app_state.is_animating) {
       // Timer/T-Lapse pages: edit the currently visible card
-      // IMPORTANT: Store current option to prevent unwanted changes
+      // IMPORTANT: Use current_option to determine which card is active
       int target_option = app_state.current_option;
       
       DEBUG_PRINTF("Adaptive encoder input - Current option: %d, Target option: %d\n", 
@@ -62,8 +50,13 @@ void handle_encoder_input() {
   // Check if encoder button was pressed (optional - for future use)
   if (is_encoder_button_pressed()) {
     DEBUG_PRINTLN("Encoder button pressed");
-    // Could be used to toggle between coarse/fine adjustment
-    // or enter/exit editing mode
+    // Could be used to toggle between options manually
+    if (is_main_template_state(app_state.current_state) && app_state.current_state != STATE_INTERVAL) {
+      // Toggle between option 0 and 1 for Timer/T-Lapse
+      app_state.current_option = (app_state.current_option == 0) ? 1 : 0;
+      animate_to_option(app_state.current_option);
+      DEBUG_PRINTF("Encoder button: Switched to option %d\n", app_state.current_option);
+    }
   }
 }
 
@@ -90,22 +83,21 @@ void app_init() {
   
   DEBUG_PRINTLN("=== Application Ready ===");
   DEBUG_PRINTLN("Available Functions:");
-  DEBUG_PRINTLN("- Loading screen with animations (7s)");
-  DEBUG_PRINTLN("- Smart navigation system (no back loops)");
+  DEBUG_PRINTLN("- Loading screen with animations");
+  DEBUG_PRINTLN("- Smart navigation system (Main → Sub, no Detail)");
   DEBUG_PRINTLN("- Main page with 4 buttons & battery display");
   DEBUG_PRINTLN("- Template pages with swipe navigation & battery");
-  DEBUG_PRINTLN("- Detail pages with dynamic content & battery");
-  DEBUG_PRINTLN("- Popup modal system");
+  DEBUG_PRINTLN("- Simplified navigation (no detail subsites)");
   DEBUG_PRINTLN("- State machine navigation");
   DEBUG_PRINTLN("- Battery management system");
   DEBUG_PRINTLN("- Rotary encoder value editing (3 SPEEDS)");
   DEBUG_PRINTF("- Loading screen: %s\n", LOADING_SCREEN_ENABLED ? "ENABLED" : "DISABLED");
   DEBUG_PRINTLN("========================");
-  DEBUG_PRINTLN("Navigation Hierarchy:");
+  DEBUG_PRINTLN("Navigation Hierarchy (SIMPLIFIED):");
   DEBUG_PRINTLN("  MAIN");
-  DEBUG_PRINTLN("  ├── TIMER → DETAIL");
-  DEBUG_PRINTLN("  ├── TLAPSE → DETAIL");
-  DEBUG_PRINTLN("  ├── INTERVAL → DETAIL");
+  DEBUG_PRINTLN("  ├── TIMER (cards: Delay, Release)");
+  DEBUG_PRINTLN("  ├── TLAPSE (cards: Total, Frames)");
+  DEBUG_PRINTLN("  ├── INTERVAL (single card: Interval)");
   DEBUG_PRINTLN("  └── SETTINGS");
   DEBUG_PRINTLN("========================");
   DEBUG_PRINTLN("Encoder Functions (3 SPEEDS):");
@@ -113,7 +105,7 @@ void app_init() {
   DEBUG_PRINTLN("- Swipe cards to change which value is being edited");
   DEBUG_PRINTLN("- Values are saved globally and persist");
   DEBUG_PRINTLN("- 3 speeds: 1s, 10s, 30s steps");
-  DEBUG_PRINTLN("- Hysteresis prevents speed jumping");
+  DEBUG_PRINTLN("- Cards are no longer clickable (no detail pages)");
   DEBUG_PRINTLN("========================");
 }
 
@@ -149,17 +141,7 @@ void app_loop() {
   // Handle rotary encoder input
   handle_encoder_input();
   
-  // Example: Update dynamic text every 10 seconds for demo
-  static unsigned long lastUpdate = 0;
-  static int counter = 0;
-  
-  if (millis() - lastUpdate > DYNAMIC_TEXT_UPDATE_INTERVAL && app_state.current_state == STATE_DETAIL) {
-    lastUpdate = millis();
-    counter++;
-    String newText = get_detail_heading() + " - Updated " + String(counter) + " times";
-    update_dynamic_text(newText);
-    lv_label_set_text(detail_content_label, app_state.dynamic_text.c_str());
-  }
+  // REMOVED: Dynamic text update for detail page (no longer exists)
   
   delay(5);
 }
@@ -172,7 +154,7 @@ void handle_serial_commands() {
     String command = Serial.readStringUntil('\n');
     command.trim();
     
-    // Battery commands an das Battery-System weiterleiten
+    // Battery commands
     if (command.startsWith("bat") || command.indexOf("battery") >= 0) {
       handle_battery_serial_commands(command);
     }
@@ -245,9 +227,8 @@ void handle_serial_commands() {
       DEBUG_PRINTF("T-Lapse - Total: %s, Frames: %s\n", 
                    format_time_value(tlapse_values.option1.seconds, tlapse_values.option1.format).c_str(),
                    format_time_value(tlapse_values.option2.seconds, tlapse_values.option2.format).c_str());
-      DEBUG_PRINTF("Interval - Interval: %s, Count: %s\n", 
-                   format_time_value(interval_values.option1.seconds, interval_values.option1.format).c_str(),
-                   format_time_value(interval_values.option2.seconds, interval_values.option2.format).c_str());
+      DEBUG_PRINTF("Interval - Interval: %s\n", 
+                   format_time_value(interval_values.option1.seconds, interval_values.option1.format).c_str());
       DEBUG_PRINTLN("======================");
     }
     else if (command == "values reset") {
@@ -274,7 +255,7 @@ void handle_serial_commands() {
         DEBUG_PRINTF("Loading time remaining: %lu ms\n", remaining > 0 ? remaining : 0);
       }
     }
-    // Navigation test commands
+    // Navigation test commands - SIMPLIFIED (removed detail navigation)
     else if (command == "nav test") {
       DEBUG_PRINTLN("Testing navigation system...");
       DEBUG_PRINTF("Current: %d, Parent would be: %d\n", 
@@ -285,15 +266,15 @@ void handle_serial_commands() {
       change_state(STATE_TIMER);
       show_current_page();
     }
-    else if (command == "nav detail") {
-      if (is_main_template_state(app_state.current_state)) {
-        DEBUG_PRINTLN("Navigating to DETAIL");
-        app_state.detail_context = get_detail_context();
-        change_state(STATE_DETAIL);
-        show_current_page();
-      } else {
-        DEBUG_PRINTLN("Can only go to DETAIL from template pages");
-      }
+    else if (command == "nav tlapse") {
+      DEBUG_PRINTLN("Navigating to T-LAPSE");
+      change_state(STATE_TLAPSE);
+      show_current_page();
+    }
+    else if (command == "nav interval") {
+      DEBUG_PRINTLN("Navigating to INTERVAL");
+      change_state(STATE_INTERVAL);
+      show_current_page();
     }
     else if (command == "nav main") {
       DEBUG_PRINTLN("Navigating to MAIN");
@@ -304,7 +285,7 @@ void handle_serial_commands() {
       DEBUG_PRINTLN("Testing back navigation");
       go_back();
     }
-
+    // Timer system commands
     else if (command.startsWith("timer ")) {
       String param = command.substring(6);
       if (param == "start") {
@@ -325,17 +306,39 @@ void handle_serial_commands() {
         }
       }
     }
-
+    else if (command.startsWith("tlapse ")) {
+      String param = command.substring(7);
+      if (param == "start") {
+        if (app_state.current_state == STATE_TLAPSE) {
+          start_tlapse_execution();
+          DEBUG_PRINTLN("T-Lapse started via serial command");
+        } else {
+          DEBUG_PRINTLN("Navigate to T-Lapse page first");
+        }
+      }
+    }
+    else if (command.startsWith("interval ")) {
+      String param = command.substring(9);
+      if (param == "start") {
+        if (app_state.current_state == STATE_INTERVAL) {
+          start_interval_execution();
+          DEBUG_PRINTLN("Interval started via serial command");
+        } else {
+          DEBUG_PRINTLN("Navigate to Interval page first");
+        }
+      }
+    }
     else if (command == "help") {
       Serial.println("Available commands:");
       Serial.println("=== Loading Screen Commands ===");
       Serial.println("  loading skip    - Skip current loading screen");
       Serial.println("  loading status  - Show loading screen status");
       Serial.println("  skip            - Alias for loading skip");
-      Serial.println("=== Navigation Commands ===");
+      Serial.println("=== Navigation Commands (SIMPLIFIED) ===");
       Serial.println("  nav test        - Test navigation system");
       Serial.println("  nav timer       - Go to timer page");
-      Serial.println("  nav detail      - Go to detail page (from template)");
+      Serial.println("  nav tlapse      - Go to t-lapse page");
+      Serial.println("  nav interval    - Go to interval page");
       Serial.println("  nav main        - Go to main page");
       Serial.println("  nav back        - Test back navigation");
       Serial.println("=== Encoder Commands (3 SPEEDS) ===");
@@ -357,18 +360,16 @@ void handle_serial_commands() {
       Serial.println("  bat test        - Run battery test animation");
       Serial.println("  bat dims        - Test fill dimensions");
       Serial.println("  bat help        - Show battery commands");
-      Serial.println("=== General Commands ===");
-      Serial.println("  help            - Show this help");
-      Serial.println("=== Encoder Usage (3 SPEEDS) ===");
-      Serial.println("  1. Go to Timer/T-Lapse/Interval page");
-      Serial.println("  2. Turn encoder to change visible card value");
-      Serial.println("  3. Swipe to other card, encoder controls that card");
-      Serial.println("  4. Values are saved globally");
-      Serial.println("  5. 3 speeds: Slow (1s), Medium (10s), Fast (30s)");
-      Serial.println("  6. Hysteresis prevents jumping between speeds");
       Serial.println("=== Timer System Commands ===");
       Serial.println("  timer start/cancel - Timer control");
-      Serial.println("  servo test         - Test servo");
+      Serial.println("  tlapse start       - T-Lapse control");
+      Serial.println("  interval start     - Interval control");
+      Serial.println("=== General Commands ===");
+      Serial.println("  help            - Show this help");
+      Serial.println("=== SIMPLIFIED NAVIGATION ===");
+      Serial.println("  Main → Timer/T-Lapse/Interval/Settings");
+      Serial.println("  Cards are no longer clickable (no detail pages)");
+      Serial.println("  Use encoder to change values directly");
     }
     else {
       Serial.println("Unknown command. Type 'help' for available commands.");
@@ -393,7 +394,7 @@ void setup() {
     DEBUG_PRINTLN("Loading screen: DISABLED (debug mode)");
   }
   
-  // Show encoder improvements - CORRECTED FOR 3 SPEEDS
+  // Show encoder improvements
   DEBUG_PRINTLN("=== ENCODER CONFIGURATION (3 SPEEDS) ===");
   DEBUG_PRINTF("Hysteresis: %s\n", ENCODER_HYSTERESIS_ENABLED ? "ENABLED" : "DISABLED");
   DEBUG_PRINTF("Smoothing: %s\n", ENCODER_SMOOTHING_ENABLED ? "ENABLED" : "DISABLED");
@@ -419,7 +420,6 @@ void setup() {
     DEBUG_PRINTLN("Serial Commands available - type 'help' for list");
     DEBUG_PRINTLN("Encoder test: 'nav timer' then 'enc up'/'enc up10'/'enc up30'");
     DEBUG_PRINTLN("Encoder debug: 'enc debug' to see current settings");
-    // Initial battery status (only if not loading)
     print_battery_status();
   }
 }

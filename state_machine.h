@@ -1,6 +1,6 @@
 /*
 =============================================================================
-state_machine.h - State Management System with Value Storage
+state_machine.h - Simplified State Management System (No Detail States)
 =============================================================================
 */
 
@@ -11,7 +11,7 @@ state_machine.h - State Management System with Value Storage
 #include "config.h"
 
 // =============================================================================
-// STATE DEFINITIONS
+// STATE DEFINITIONS - SIMPLIFIED
 // =============================================================================
 enum AppState {
   STATE_LOADING,    
@@ -19,18 +19,11 @@ enum AppState {
   STATE_TIMER,
   STATE_TLAPSE, 
   STATE_INTERVAL,
-  STATE_SETTINGS,
-  STATE_DETAIL
+  STATE_SETTINGS
+  // REMOVED: STATE_DETAIL
 };
 
-enum DetailContext {
-  DETAIL_TIMER_OPTION1,
-  DETAIL_TIMER_OPTION2,
-  DETAIL_TLAPSE_OPTION1,
-  DETAIL_TLAPSE_OPTION2,
-  DETAIL_INTERVAL_OPTION1,
-  DETAIL_INTERVAL_OPTION2
-};
+// REMOVED: DetailContext enum - no longer needed
 
 // =============================================================================
 // VALUE STORAGE STRUCTURES
@@ -52,7 +45,7 @@ struct PageValues {
 };
 
 // =============================================================================
-// DATA STRUCTURES
+// DATA STRUCTURES - SIMPLIFIED
 // =============================================================================
 struct PageContent {
   String heading;
@@ -65,12 +58,12 @@ struct PageContent {
 struct AppStateData {
   AppState current_state;
   AppState previous_state;
-  DetailContext detail_context;
-  int current_option;
+  int current_option;           // For encoder editing
   bool is_animating;
   String dynamic_text;
   unsigned long loading_start_time;
-  bool encoder_editing_mode;    // New: Track if we're in editing mode
+  bool encoder_editing_mode;    // Track if we're in editing mode
+  // REMOVED: DetailContext detail_context - no longer needed
 };
 
 // =============================================================================
@@ -81,7 +74,7 @@ extern PageContent timer_content;
 extern PageContent tlapse_content;
 extern PageContent interval_content;
 
-// New: Value storage for all pages
+// Value storage for all pages
 extern PageValues timer_values;
 extern PageValues tlapse_values;
 extern PageValues interval_values;
@@ -109,38 +102,38 @@ PageValues* get_current_page_values();
 void update_page_content_from_values(AppState page);
 
 // =============================================================================
-// DATA MANAGEMENT FUNCTIONS
+// DATA MANAGEMENT FUNCTIONS - SIMPLIFIED
 // =============================================================================
 void update_dynamic_text(String new_text);
 PageContent get_current_content();
-String get_detail_heading();
-DetailContext get_detail_context();
+// REMOVED: String get_detail_heading();
+// REMOVED: DetailContext get_detail_context();
 
 // =============================================================================
 // STATE MACHINE IMPLEMENTATION
 // =============================================================================
 
-// Global state instance
+// Global state instance - SIMPLIFIED
 AppStateData app_state = {
   LOADING_SCREEN_ENABLED ? STATE_LOADING : STATE_MAIN, 
   STATE_LOADING, 
-  DETAIL_TIMER_OPTION1, 
-  0, 
-  false, 
+  0,      // current_option
+  false,  // is_animating
   "Loading...", 
-  0,
-  false  // encoder_editing_mode
+  0,      // loading_start_time
+  false   // encoder_editing_mode
+  // REMOVED: detail_context
 };
 
-// Default page values - these will be overridden by values_init()
+// Value storage - unchanged
 PageValues timer_values;
 PageValues tlapse_values;
 PageValues interval_values;
 
 // Content data - will be updated from values
 PageContent timer_content = {"Timer", "Delay", "Release", "00:00", "00:00"};
-PageContent tlapse_content = {"Timelapse", "Total", "Frames", "00:00", "0"};  // CHANGED: "Total" statt "Total Time"
-PageContent interval_content = {"Interval", "Interval", "", "00:00", ""}; // Keine zweite Option
+PageContent tlapse_content = {"Timelapse", "Total", "Frames", "00:00", "0"};
+PageContent interval_content = {"Interval", "Interval", "", "00:00", ""}; // No second option
 
 // Forward declaration for UI
 void show_current_page();
@@ -152,26 +145,26 @@ void update_template_content(PageContent content);
 void values_init() {
   DEBUG_PRINTLN("Initializing value storage system...");
   
-  // Initialize Timer values - beide starten bei 00:00
+  // Initialize Timer values
   timer_values.page_title = "Timer";
   timer_values.option1_label = "Delay";
   timer_values.option2_label = "Release";
-  timer_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};  // 00:00
-  timer_values.option2 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};  // 00:00
+  timer_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
+  timer_values.option2 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
   
-  // Initialize Timelapse values - GEÄNDERT: Total Time verwendet jetzt auch adaptive Schritte
+  // Initialize Timelapse values
   tlapse_values.page_title = "Timelapse";
   tlapse_values.option1_label = "Total";
   tlapse_values.option2_label = "Frames";
-  tlapse_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL}; // 00:00 - GEÄNDERT: war VALUE_INCREMENT_LARGE
-  tlapse_values.option2 = {0, VALUE_FORMAT_COUNT, 0, 0, 1};                       // 0 frames (max wird dynamisch gesetzt)
+  tlapse_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
+  tlapse_values.option2 = {0, VALUE_FORMAT_COUNT, 0, 0, 1};
   
-  // Initialize Interval values - nur Timer, keine zweite Option
+  // Initialize Interval values
   interval_values.page_title = "Interval";
   interval_values.option1_label = "Interval";
-  interval_values.option2_label = "";  // Leer, wird nicht verwendet
-  interval_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};  // 00:00
-  interval_values.option2 = {0, VALUE_FORMAT_COUNT, 0, 0, 1};                        // Nicht verwendet
+  interval_values.option2_label = "";  // Empty, not used
+  interval_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
+  interval_values.option2 = {0, VALUE_FORMAT_COUNT, 0, 0, 1}; // Not used
   
   // Update page content from these values
   update_page_content_from_values(STATE_TIMER);
@@ -179,11 +172,10 @@ void values_init() {
   update_page_content_from_values(STATE_INTERVAL);
   
   DEBUG_PRINTLN("Value storage initialized - all values start at 00:00");
-  DEBUG_PRINTLN("T-Lapse Total Time now uses adaptive encoder steps (1s/10s/30s)");
 }
 
 String format_time_value(uint32_t seconds, uint8_t format) {
-  // Sichere Trigger-Erkennung: -1 als uint32_t ist 4294967295 (0xFFFFFFFF)
+  // Handle trigger mode for timer release
   if (seconds == 4294967295 || (int32_t)seconds == -1) {
     return "SHOT";
   }
@@ -203,7 +195,6 @@ String format_time_value(uint32_t seconds, uint8_t format) {
       return String(seconds);
   }
 }
-
 
 PageValues* get_current_page_values() {
   switch (app_state.current_state) {
@@ -226,9 +217,6 @@ uint32_t get_option_value(AppState page, int option) {
   return (option == 0) ? values->option1.seconds : values->option2.seconds;
 }
 
-
-
-
 void update_option_value(AppState page, int option, int32_t delta) {
   PageValues* values = nullptr;
   switch (page) {
@@ -240,47 +228,41 @@ void update_option_value(AppState page, int option, int32_t delta) {
   
   OptionValue* target_option = (option == 0) ? &values->option1 : &values->option2;
   
-  // SPEZIAL BEHANDLUNG: Timer Release (Option 1) mit Trigger Mode
-  if (page == STATE_TIMER && option == 1) { // Release Zeit
-    
-    // Cast zu signed int für saubere Trigger-Behandlung
+  // Special handling: Timer Release (Option 1) with Trigger Mode
+  if (page == STATE_TIMER && option == 1) { // Release time
     int32_t current_value = (int32_t)target_option->seconds;
     
     // Handle Trigger Mode (-1)
     if (current_value == -1) {
       if (delta > 0) {
-        // Von Trigger nach oben = zu 00:00
+        // From Trigger up = to 00:00
         target_option->seconds = 0;
         DEBUG_PRINTLN("Switched from Trigger to 00:00");
       } else {
-        // Von Trigger nach unten = BLOCKIERT, bleibt bei Trigger
+        // From Trigger down = BLOCKED
         DEBUG_PRINTLN("Blocked: Cannot scroll down from Trigger mode");
-        return; // Keine Änderung
+        return;
       }
     }
-    // Handle normale Werte (>= 0)
+    // Handle normal values (>= 0)
     else if (current_value >= 0) {
       int32_t new_value = current_value + (delta * target_option->increment);
       
       if (new_value < 0) {
-        // Unter 0 scrollen = zu Trigger
-        target_option->seconds = (uint32_t)-1; // -1 als Trigger-Indikator
+        // Scroll below 0 = to Trigger
+        target_option->seconds = (uint32_t)-1;
         DEBUG_PRINTLN("Switched from 00:00 to Trigger mode");
       } else if (new_value > target_option->max_value) {
-        // Über Maximum
         target_option->seconds = target_option->max_value;
       } else {
-        // Normaler gültiger Wert
         target_option->seconds = (uint32_t)new_value;
       }
-    }
-    // Handle fehlerhafte Werte (sollte nicht passieren)
-    else {
+    } else {
       DEBUG_PRINTF("ERROR: Invalid timer release value: %d, resetting to 0\n", current_value);
       target_option->seconds = 0;
     }
   } 
-  // NORMALE BEHANDLUNG für alle anderen Optionen
+  // Normal handling for all other options
   else {
     int64_t new_value = (int64_t)target_option->seconds + (delta * target_option->increment);
     
@@ -322,7 +304,6 @@ void update_option_value(AppState page, int option, int32_t delta) {
   update_page_content_from_values(page);
 }
 
-
 void update_page_content_from_values(AppState page) {
   PageValues* values = nullptr;
   PageContent* content = nullptr;
@@ -351,19 +332,15 @@ void update_page_content_from_values(AppState page) {
   
   // Special handling for different pages
   if (page == STATE_INTERVAL) {
-    content->option2_text = "";   // Interval hat keine zweite Option
-    content->option2_time = "";   // Leer lassen
+    content->option2_text = "";   // Interval has no second option
+    content->option2_time = "";   // Empty
   } else {
     content->option2_time = format_time_value(values->option2.seconds, values->option2.format);
   }
-  
-  // Note: UI updates will be handled by the UI system when values change
-  // We don't call update_template_content or update_interval_content directly here
-  // because that would create circular dependencies
 }
 
 // =============================================================================
-// EXISTING FUNCTIONS (unchanged)
+// STATE MANAGEMENT IMPLEMENTATION - SIMPLIFIED
 // =============================================================================
 void state_machine_init() {
   if (LOADING_SCREEN_ENABLED) {
@@ -406,18 +383,10 @@ AppState get_parent_state(AppState current_state) {
     case STATE_LOADING:
       return STATE_MAIN;
       
-    case STATE_DETAIL:
-      if (is_main_template_state(app_state.previous_state)) {
-        return app_state.previous_state;
-      } else {
-        return STATE_MAIN;
-      }
-      
+    // All template states go back to main
     case STATE_TIMER:
     case STATE_TLAPSE:
     case STATE_INTERVAL:
-      return STATE_MAIN;
-      
     case STATE_SETTINGS:
       return STATE_MAIN;
       
@@ -425,6 +394,7 @@ AppState get_parent_state(AppState current_state) {
     default:
       return STATE_MAIN;
   }
+  // REMOVED: STATE_DETAIL handling
 }
 
 bool is_main_template_state(AppState state) {
@@ -456,24 +426,7 @@ PageContent get_current_content() {
   }
 }
 
-String get_detail_heading() {
-  PageContent content = get_current_content();
-  if (app_state.current_option == 0) {
-    return content.option1_text;
-  } else {
-    return content.option2_text;
-  }
-}
-
-DetailContext get_detail_context() {
-  if (app_state.current_state == STATE_TIMER) {
-    return app_state.current_option == 0 ? DETAIL_TIMER_OPTION1 : DETAIL_TIMER_OPTION2;
-  } else if (app_state.current_state == STATE_TLAPSE) {
-    return app_state.current_option == 0 ? DETAIL_TLAPSE_OPTION1 : DETAIL_TLAPSE_OPTION2;
-  } else if (app_state.current_state == STATE_INTERVAL) {
-    return app_state.current_option == 0 ? DETAIL_INTERVAL_OPTION1 : DETAIL_INTERVAL_OPTION2;
-  }
-  return DETAIL_TIMER_OPTION1;
-}
+// REMOVED: get_detail_heading() - no longer needed
+// REMOVED: get_detail_context() - no longer needed
 
 #endif // STATE_MACHINE_H
