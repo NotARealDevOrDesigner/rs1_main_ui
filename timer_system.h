@@ -176,15 +176,14 @@ void servo_init() {
   // Initialize absolute maximum (this should never change)
   servoAbsoluteMaxPosition = SERVO_ABSOLUTE_MAX_POSITION;
   
-  // Set initial working stop based on current percentage
+  // WICHTIG: Set initial working stop based on LOADED percentage from settings
   int servo_range = servoAbsoluteMaxPosition - servoStartPosition;
   servoEndPosition = servoStartPosition + (servo_range * app_state.servo_wire_percentage / 100);
   
   servo_move_to_position(servoStartPosition);
-  // REMOVED: delay(500); - blocking delay removed
   
-  DEBUG_PRINTF("Servo initialized - Start: %d°, Working Stop: %d°, Absolute Max: %d°\n", 
-               servoStartPosition, servoEndPosition, servoAbsoluteMaxPosition);
+  DEBUG_PRINTF("Servo initialized - Start: %d°, Working Stop: %d° (from %d%% setting), Absolute Max: %d°\n", 
+               servoStartPosition, servoEndPosition, app_state.servo_wire_percentage, servoAbsoluteMaxPosition);
 }
 
 void servo_move_to_position(int position) {

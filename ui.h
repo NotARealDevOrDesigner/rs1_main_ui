@@ -28,6 +28,8 @@ struct MainCard {
 // =============================================================================
 #ifndef UI_GLOBALS_DEFINED
 #define UI_GLOBALS_DEFINED
+// External
+extern void save_app_state();
 
 // Loading screen objects
 lv_obj_t *loading_page;
@@ -918,6 +920,19 @@ void create_wire_settings_page() {
 
   // Initialize display
   update_wire_percentage_display();
+
+  // WICHTIG: Initialize switch states with LOADED values
+  if (app_state.led_enabled) {
+    lv_obj_add_state(settings_led_switch, LV_STATE_CHECKED);
+  } else {
+    lv_obj_clear_state(settings_led_switch, LV_STATE_CHECKED);
+  }
+  
+  if (app_state.bluetooth_enabled) {
+    lv_obj_add_state(settings_bt_switch, LV_STATE_CHECKED);
+  } else {
+    lv_obj_clear_state(settings_bt_switch, LV_STATE_CHECKED);
+  }
 }
 
 void update_wire_percentage_display() {
@@ -1035,9 +1050,10 @@ void wire_settings_back_cb(lv_event_t *e) {
 
 void wire_save_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-    DEBUG_PRINTF("Wire settings saved: %d%%\n", app_state.servo_wire_percentage);
-    // Here you would save to EEPROM/preferences
-    go_back(); // Return to main settings
+    // Verwende die Settings-Funktion statt Direct Access
+    save_app_state();
+    DEBUG_PRINTF("Wire settings saved via button: %d%%\n", app_state.servo_wire_percentage);
+    go_back();
   }
 }
 

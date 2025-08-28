@@ -7,9 +7,11 @@ ESP32-C6 Camera Control App - Main Application (Fixed without Detail)
 #include "config.h"
 #include "state_machine.h"
 #include "hardware.h"
+#include "settings.h" 
 #include "ui.h"
 #include "battery.h"
 #include "timer_system.h" 
+ 
 
 // =============================================================================
 // ROTARY ENCODER HANDLING
@@ -26,29 +28,9 @@ if (encoder_delta != 0) {
       // Force UI update for interval page
       update_interval_content(interval_content);
       DEBUG_PRINTF("Adaptive encoder moved: %d, updating Interval timer\n", encoder_delta);
-      }
-
-    /*
-    else if (app_state.current_state == STATE_WIRE_SETTINGS) {
-      // Wire settings: adjust percentage (0-100%)
-      app_state.servo_wire_percentage += encoder_delta;
-      if (app_state.servo_wire_percentage < 0) {
-        app_state.servo_wire_percentage = 0;
-      } else if (app_state.servo_wire_percentage > 100) {
-        app_state.servo_wire_percentage = 100;
-      }
-      
-      update_wire_percentage_display();
-      
-      // LIVE SERVO MOVEMENT - Calculate actual position
-      int servo_range = servoEndPosition - servoStartPosition;
-      int target_position = servoStartPosition + (servo_range * app_state.servo_wire_percentage / 100);
-      servo_move_to_position(target_position);
-      
-      DEBUG_PRINTF("Wire percentage: %d%%, Servo position: %d°\n", 
-                   app_state.servo_wire_percentage, target_position);
     }
-    */
+
+
     else if (app_state.current_state == STATE_WIRE_SETTINGS) {
       // Wire settings: adjust percentage (0-100%)
       app_state.servo_wire_percentage += encoder_delta;
@@ -57,20 +39,27 @@ if (encoder_delta != 0) {
       } else if (app_state.servo_wire_percentage > 100) {
         app_state.servo_wire_percentage = 100;
       }
-    update_wire_percentage_display();
   
-    // UPDATED: Calculate position from absolute maximum, then update working stop
-    int servo_range = servoAbsoluteMaxPosition - servoStartPosition;
-    int target_position = servoStartPosition + (servo_range * app_state.servo_wire_percentage / 100);
+      update_wire_percentage_display();
   
-    // Update the working stop position
-    servoEndPosition = target_position;
+      // Calculate and move servo...
+      int servo_range = servoAbsoluteMaxPosition - servoStartPosition;
+      int target_position = servoStartPosition + (servo_range * app_state.servo_wire_percentage / 100);
+      servoEndPosition = target_position;
+      servo_move_to_position(target_position);
   
-    // LIVE SERVO MOVEMENT - move to new working position
-    servo_move_to_position(target_position);
+      DEBUG_PRINTF("Wire percentage: %d%%, Working stop updated to: %d°\n", 
+               app_state.servo_wire_percentage, servoEndPosition);
   
-    DEBUG_PRINTF("Wire percentage: %d%%, Working stop updated to: %d° (absolute max: %d°)\n", 
-                app_state.servo_wire_percentage, servoEndPosition, servoAbsoluteMaxPosition);
+      // GEÄNDERT: Immer speichern, unabhängig von settings_initialized
+      static unsigned long last_wire_save = 0;
+      if (millis() - last_wire_save > 1000) { // Max 1x pro Sekunde
+        preferences.begin(SETTINGS_NAMESPACE, false);
+        preferences.putInt(KEY_SERVO_WIRE_PCT, app_state.servo_wire_percentage);
+        preferences.end();
+        last_wire_save = millis();
+        DEBUG_PRINTF("DIRECT SAVE: Wire percentage %d%% saved to flash\n", app_state.servo_wire_percentage);
+      }
     }
 
     else if (is_main_template_state(app_state.current_state) && !app_state.is_animating) {
@@ -115,6 +104,7 @@ void app_init() {
   
   // Initialize subsystems in order
   state_machine_init();
+  settings_init();
   hardware_init();  // This now calls encoder_init_extended() internally
   
   // Battery system initialization (delayed if loading screen is active)
@@ -270,6 +260,9 @@ void handle_serial_commands() {
           update_wire_percentage_display();
           DEBUG_PRINTF("Wire percentage set to: %d%%\n", app_state.servo_wire_percentage);
         }
+      }
+      else if (command.startsWith("settings ")) {
+        handle_settings_serial_commands(command);
       }
 
       else if (param == "debug") {

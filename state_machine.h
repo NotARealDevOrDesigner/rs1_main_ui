@@ -10,6 +10,9 @@ state_machine.h - Simplified State Management System (No Detail States)
 #include <Arduino.h>
 #include "config.h"
 
+
+extern bool settings_initialized;
+extern void save_timer_values();
 // =============================================================================
 // STATE DEFINITIONS - SIMPLIFIED
 // =============================================================================
@@ -150,33 +153,47 @@ void update_template_content(PageContent content);
 void values_init() {
   DEBUG_PRINTLN("Initializing value storage system...");
   
-  // Initialize Timer values
-  timer_values.page_title = "Timer";
-  timer_values.option1_label = "Delay";
-  timer_values.option2_label = "Release";
-  timer_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
-  timer_values.option2 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
+  // NOTE: Settings werden von settings_init() geladen
+  // Hier nur Fallback-Initialisierung falls keine Settings existieren
   
-  // Initialize Timelapse values
-  tlapse_values.page_title = "Timelapse";
-  tlapse_values.option1_label = "Total";
-  tlapse_values.option2_label = "Frames";
-  tlapse_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
-  tlapse_values.option2 = {0, VALUE_FORMAT_COUNT, 0, 0, 1};
+  // Check if values were loaded from settings, if not initialize defaults
+  bool need_timer_init = (timer_values.page_title.isEmpty());
+  bool need_tlapse_init = (tlapse_values.page_title.isEmpty());
+  bool need_interval_init = (interval_values.page_title.isEmpty());
   
-  // Initialize Interval values
-  interval_values.page_title = "Interval";
-  interval_values.option1_label = "Interval";
-  interval_values.option2_label = "";  // Empty, not used
-  interval_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
-  interval_values.option2 = {0, VALUE_FORMAT_COUNT, 0, 0, 1}; // Not used
+  if (need_timer_init) {
+    DEBUG_PRINTLN("Initializing Timer defaults (not loaded from settings)");
+    timer_values.page_title = "Timer";
+    timer_values.option1_label = "Delay";
+    timer_values.option2_label = "Release";
+    timer_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
+    timer_values.option2 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
+  }
   
-  // Update page content from these values
+  if (need_tlapse_init) {
+    DEBUG_PRINTLN("Initializing T-Lapse defaults (not loaded from settings)");
+    tlapse_values.page_title = "Timelapse";
+    tlapse_values.option1_label = "Total";
+    tlapse_values.option2_label = "Frames";
+    tlapse_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
+    tlapse_values.option2 = {0, VALUE_FORMAT_COUNT, 0, 0, 1};
+  }
+  
+  if (need_interval_init) {
+    DEBUG_PRINTLN("Initializing Interval defaults (not loaded from settings)");
+    interval_values.page_title = "Interval";
+    interval_values.option1_label = "Interval";
+    interval_values.option2_label = "";  // Empty, not used
+    interval_values.option1 = {0, VALUE_FORMAT_MM_SS, 0, 3599, VALUE_INCREMENT_SMALL};
+    interval_values.option2 = {0, VALUE_FORMAT_COUNT, 0, 0, 1}; // Not used
+  }
+  
+  // Always update page content from loaded/initialized values
   update_page_content_from_values(STATE_TIMER);
-  update_page_content_from_values(STATE_TLAPSE);  
+  update_page_content_from_values(STATE_TLAPSE);
   update_page_content_from_values(STATE_INTERVAL);
   
-  DEBUG_PRINTLN("Value storage initialized - all values start at 00:00");
+  DEBUG_PRINTLN("Value storage initialized - all pages ready");
 }
 
 String format_time_value(uint32_t seconds, uint8_t format) {
@@ -307,6 +324,12 @@ void update_option_value(AppState page, int option, int32_t delta) {
                format_time_value(target_option->seconds, target_option->format).c_str());
   
   update_page_content_from_values(page);
+
+  // Auto-save after value change
+  if (settings_initialized) {
+    save_timer_values(); // Only save timer values for performance
+  }
+
 }
 
 void update_page_content_from_values(AppState page) {
