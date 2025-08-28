@@ -19,8 +19,8 @@ enum AppState {
   STATE_TIMER,
   STATE_TLAPSE, 
   STATE_INTERVAL,
-  STATE_SETTINGS
-  // REMOVED: STATE_DETAIL
+  STATE_SETTINGS,
+  STATE_WIRE_SETTINGS
 };
 
 // REMOVED: DetailContext enum - no longer needed
@@ -64,6 +64,9 @@ struct AppStateData {
   unsigned long loading_start_time;
   bool encoder_editing_mode;    // Track if we're in editing mode
   // REMOVED: DetailContext detail_context - no longer needed
+  bool led_enabled;
+  bool bluetooth_enabled;
+  int servo_wire_percentage;
 };
 
 // =============================================================================
@@ -121,8 +124,10 @@ AppStateData app_state = {
   false,  // is_animating
   "Loading...", 
   0,      // loading_start_time
-  false   // encoder_editing_mode
-  // REMOVED: detail_context
+  false,   // encoder_editing_mode
+  true,   // DIESE 3 ZEILEN HINZUFÜGEN
+  false,  
+  100     
 };
 
 // Value storage - unchanged
@@ -389,7 +394,10 @@ AppState get_parent_state(AppState current_state) {
     case STATE_INTERVAL:
     case STATE_SETTINGS:
       return STATE_MAIN;
-      
+    
+    case STATE_WIRE_SETTINGS:  
+      return STATE_SETTINGS;
+
     case STATE_MAIN:
     default:
       return STATE_MAIN;

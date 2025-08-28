@@ -14,6 +14,8 @@ config.h - Hardware Configuration & System Constants
 #define SERVO_START_POSITION 0      // Adjustable start position (0-180°)
 #define SERVO_END_POSITION 90       // Adjustable end position (0-180°) 
 #define SERVO_ACTIVATION_TIME 0.6   // Adjustable activation time in seconds
+#define SERVO_ABSOLUTE_MAX_POSITION 90    // The true 100% position (never changes)
+extern int servoAbsoluteMaxPosition;      // Runtime variable for absolute max
 
 // Timer Colors (add to existing color definitions)
 #define COLOR_TIMER_PRIMARY   0x007BFF    // Blue for main countdown

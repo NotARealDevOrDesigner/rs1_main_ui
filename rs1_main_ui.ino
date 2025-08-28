@@ -18,7 +18,7 @@ void handle_encoder_input() {
   // Get adaptive encoder movement (speed-based steps)
   int32_t encoder_delta = get_adaptive_encoder_delta();
   
-  if (encoder_delta != 0) {
+if (encoder_delta != 0) {
     // Handle encoder input based on current state
     if (app_state.current_state == STATE_INTERVAL) {
       // Interval page: always edit the single option (option 0)
@@ -26,7 +26,53 @@ void handle_encoder_input() {
       // Force UI update for interval page
       update_interval_content(interval_content);
       DEBUG_PRINTF("Adaptive encoder moved: %d, updating Interval timer\n", encoder_delta);
+      }
+
+    /*
+    else if (app_state.current_state == STATE_WIRE_SETTINGS) {
+      // Wire settings: adjust percentage (0-100%)
+      app_state.servo_wire_percentage += encoder_delta;
+      if (app_state.servo_wire_percentage < 0) {
+        app_state.servo_wire_percentage = 0;
+      } else if (app_state.servo_wire_percentage > 100) {
+        app_state.servo_wire_percentage = 100;
+      }
+      
+      update_wire_percentage_display();
+      
+      // LIVE SERVO MOVEMENT - Calculate actual position
+      int servo_range = servoEndPosition - servoStartPosition;
+      int target_position = servoStartPosition + (servo_range * app_state.servo_wire_percentage / 100);
+      servo_move_to_position(target_position);
+      
+      DEBUG_PRINTF("Wire percentage: %d%%, Servo position: %d°\n", 
+                   app_state.servo_wire_percentage, target_position);
     }
+    */
+    else if (app_state.current_state == STATE_WIRE_SETTINGS) {
+      // Wire settings: adjust percentage (0-100%)
+      app_state.servo_wire_percentage += encoder_delta;
+      if (app_state.servo_wire_percentage < 0) {
+        app_state.servo_wire_percentage = 0;
+      } else if (app_state.servo_wire_percentage > 100) {
+        app_state.servo_wire_percentage = 100;
+      }
+    update_wire_percentage_display();
+  
+    // UPDATED: Calculate position from absolute maximum, then update working stop
+    int servo_range = servoAbsoluteMaxPosition - servoStartPosition;
+    int target_position = servoStartPosition + (servo_range * app_state.servo_wire_percentage / 100);
+  
+    // Update the working stop position
+    servoEndPosition = target_position;
+  
+    // LIVE SERVO MOVEMENT - move to new working position
+    servo_move_to_position(target_position);
+  
+    DEBUG_PRINTF("Wire percentage: %d%%, Working stop updated to: %d° (absolute max: %d°)\n", 
+                app_state.servo_wire_percentage, servoEndPosition, servoAbsoluteMaxPosition);
+    }
+
     else if (is_main_template_state(app_state.current_state) && !app_state.is_animating) {
       // Timer/T-Lapse pages: edit the currently visible card
       // IMPORTANT: Use current_option to determine which card is active
@@ -206,6 +252,26 @@ void handle_serial_commands() {
           DEBUG_PRINTLN("Not on a template page");
         }
       }
+
+      else if (command == "nav settings") {
+        DEBUG_PRINTLN("Navigating to SETTINGS");
+        change_state(STATE_SETTINGS);
+        show_current_page();
+      }
+      else if (command == "nav wire") {
+        DEBUG_PRINTLN("Navigating to WIRE SETTINGS");
+        change_state(STATE_WIRE_SETTINGS);
+        show_current_page();
+      }
+      else if (command.startsWith("wire ")) {
+        String param = command.substring(5);
+        if (param.toInt() >= 0 && param.toInt() <= 100) {
+          app_state.servo_wire_percentage = param.toInt();
+          update_wire_percentage_display();
+          DEBUG_PRINTF("Wire percentage set to: %d%%\n", app_state.servo_wire_percentage);
+        }
+      }
+
       else if (param == "debug") {
         DEBUG_PRINTLN("=== Encoder Debug Info ===");
         ENCODER_DEBUG_PRINTF("Current speed level: %d\n", current_speed_level);

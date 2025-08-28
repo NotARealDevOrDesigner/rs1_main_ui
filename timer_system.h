@@ -15,6 +15,10 @@ timer_system.h - Fixed Timer/T-Lapse/Interval System with Servo Completion
 // TIMER SYSTEM CONFIGURATION
 // =============================================================================
 #define SERVO_PIN 9
+// Servo initialization tracking
+bool servo_initialization_complete = false;
+unsigned long servo_init_start_time = 0;
+#define SERVO_INIT_TIME_MS 500  // Time needed for servo to reach initial position
 
 // Timer States - ERWEITERT für Servo-Completion
 enum TimerExecutionMode {
@@ -59,6 +63,11 @@ struct TimerRuntime {
 // =============================================================================
 extern Servo cameraServo;
 extern TimerRuntime runtime;
+
+extern int servoStartPosition;      
+extern int servoEndPosition;        // This becomes the "working stop position"
+extern int servoAbsoluteMaxPosition; // NEW: The true 100% reference point
+extern float servoActivationTime;
 
 bool servo_is_activating = false;
 unsigned long servo_activation_start_time = 0;
@@ -137,8 +146,9 @@ TimerRuntime runtime;
 
 // Servo Settings (adjustable)
 int servoStartPosition = 0;      
-int servoEndPosition = 90;       
-float servoActivationTime = 0.6; 
+int servoEndPosition = 90;       // Working stop position
+int servoAbsoluteMaxPosition = SERVO_ABSOLUTE_MAX_POSITION; // True 100% reference
+float servoActivationTime = 0.6;
 
 // UI Objects Implementation
 lv_obj_t *timer_overlay = nullptr;
@@ -162,10 +172,19 @@ lv_obj_t *interval_overlay_cancel_btn = nullptr;
 void servo_init() {
   DEBUG_PRINTLN("Initializing servo...");
   cameraServo.attach(SERVO_PIN);
+  
+  // Initialize absolute maximum (this should never change)
+  servoAbsoluteMaxPosition = SERVO_ABSOLUTE_MAX_POSITION;
+  
+  // Set initial working stop based on current percentage
+  int servo_range = servoAbsoluteMaxPosition - servoStartPosition;
+  servoEndPosition = servoStartPosition + (servo_range * app_state.servo_wire_percentage / 100);
+  
   servo_move_to_position(servoStartPosition);
-  delay(500); 
-  DEBUG_PRINTF("Servo initialized on pin %d (start: %dÂ°, end: %dÂ°)\n", 
-               SERVO_PIN, servoStartPosition, servoEndPosition);
+  // REMOVED: delay(500); - blocking delay removed
+  
+  DEBUG_PRINTF("Servo initialized - Start: %d°, Working Stop: %d°, Absolute Max: %d°\n", 
+               servoStartPosition, servoEndPosition, servoAbsoluteMaxPosition);
 }
 
 void servo_move_to_position(int position) {
@@ -208,6 +227,10 @@ void timer_system_init() {
   
   servo_init();
   
+  // Initialize servo tracking
+  servo_initialization_complete = false;
+  servo_init_start_time = 0;
+  
   // Initialize runtime data - ERWEITERT
   runtime.mode = TIMER_EXEC_MODE;
   runtime.state = TIMER_IDLE;
@@ -232,6 +255,20 @@ void timer_system_init() {
 }
 
 void timer_system_update() {
+  // Handle servo initialization (non-blocking)
+  if (!servo_initialization_complete) {
+    if (servo_init_start_time == 0) {
+      servo_init_start_time = millis();
+    }
+    
+    if (millis() - servo_init_start_time >= SERVO_INIT_TIME_MS) {
+      servo_initialization_complete = true;
+      DEBUG_PRINTLN("Servo initialization complete");
+    }
+    
+    // Don't process timer functions until servo is ready
+    return;
+  }
   // Update non-blocking servo first
   servo_update();
   
@@ -286,6 +323,12 @@ void timer_system_update() {
 // TIMER EXECUTION FUNCTIONS
 // =============================================================================
 void start_timer_execution() {
+
+  if (!servo_initialization_complete) {
+    DEBUG_PRINTLN("Timer start blocked - servo still initializing");
+    return;
+  }
+
   DEBUG_PRINTLN("Starting Timer execution...");
   
   runtime.totalDelayTime = get_option_value(STATE_TIMER, 0);    

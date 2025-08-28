@@ -89,6 +89,23 @@ lv_obj_t *interval_start_btn;
 lv_obj_t *popup_overlay;
 lv_obj_t *popup_modal;
 
+// Settings page objects
+lv_obj_t *settings_page;
+lv_obj_t *settings_header_label;
+lv_obj_t *settings_battery_widget;
+lv_obj_t *settings_wire_btn;
+lv_obj_t *settings_led_switch;
+lv_obj_t *settings_bt_switch;
+
+// Wire settings page objects  
+lv_obj_t *wire_settings_page;
+lv_obj_t *wire_header_label;
+lv_obj_t *wire_battery_widget;
+lv_obj_t *wire_percentage_label;
+lv_obj_t *wire_percent_text_label;
+lv_obj_t *wire_save_btn;
+
+
 #endif // UI_GLOBALS_DEFINED
 
 // =============================================================================
@@ -138,6 +155,19 @@ void template_swipe_cb(lv_event_t *e);
 void interval_back_cb(lv_event_t *e);
 void interval_start_cb(lv_event_t *e);
 void popup_close_cb(lv_event_t *e);
+
+// Function declarations
+void create_settings_page();
+void create_wire_settings_page();
+void update_wire_percentage_display();
+
+// Event callbacks
+void settings_back_cb(lv_event_t *e);
+void settings_wire_cb(lv_event_t *e);
+void settings_led_switch_cb(lv_event_t *e);
+void settings_bt_switch_cb(lv_event_t *e);
+void wire_settings_back_cb(lv_event_t *e);
+void wire_save_cb(lv_event_t *e);
 
 // =============================================================================
 // IMPLEMENTATIONS
@@ -253,6 +283,12 @@ void update_all_battery_widgets() {
   }
   if (interval_battery_widget) {
     update_battery_widget(interval_battery_widget);
+  }
+  if (settings_battery_widget) {      // NEW
+    update_battery_widget(settings_battery_widget);
+  }
+  if (wire_battery_widget) {          // NEW
+    update_battery_widget(wire_battery_widget);
   }
 }
 
@@ -759,26 +795,159 @@ void create_popup() {
   lv_obj_center(close_label);
 }
 
+void create_settings_page() {
+  settings_page = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(settings_page, lv_pct(100), lv_pct(100));
+  lv_obj_set_style_bg_color(settings_page, lv_color_hex(COLOR_BG_MAIN), 0);
+  lv_obj_set_style_border_width(settings_page, 0, 0);
+  lv_obj_set_style_pad_all(settings_page, 0, 0);
+  lv_obj_add_flag(settings_page, LV_OBJ_FLAG_HIDDEN);
+
+  // Header with back button and battery
+  lv_obj_t *settings_header = create_page_header(settings_page, "", true);
+  settings_header_label = lv_obj_get_child(settings_header, 1);
+  settings_battery_widget = lv_obj_get_child(settings_header, 2);
+
+  // Wire Button (like in Figma)
+  settings_wire_btn = lv_btn_create(settings_page);
+  lv_obj_set_size(settings_wire_btn, 150, 46);
+  lv_obj_align(settings_wire_btn, LV_ALIGN_TOP_MID, 0, 80);
+  lv_obj_set_style_bg_color(settings_wire_btn, lv_color_hex(COLOR_BTN_PRIMARY), 0);
+  lv_obj_set_style_radius(settings_wire_btn, 8, 0);
+  lv_obj_add_event_cb(settings_wire_btn, settings_wire_cb, LV_EVENT_CLICKED, NULL);
+  
+  lv_obj_t *wire_label = lv_label_create(settings_wire_btn);
+  lv_label_set_text(wire_label, "Wire");
+  lv_obj_set_style_text_color(wire_label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+  lv_obj_set_style_text_font(wire_label, &lv_font_montserrat_20, 0);
+  lv_obj_center(wire_label);
+
+  // LED Toggle Row
+  lv_obj_t *led_container = lv_obj_create(settings_page);
+  lv_obj_set_size(led_container, 150, 50);
+  lv_obj_align(led_container, LV_ALIGN_TOP_MID, 0, 140);
+  lv_obj_set_style_bg_color(led_container, lv_color_hex(COLOR_BTN_SECONDARY), 0);
+  lv_obj_set_style_radius(led_container, 8, 0);
+  lv_obj_set_style_border_width(led_container, 0, 0);
+  lv_obj_set_style_pad_all(led_container, 15, 0);
+  
+  lv_obj_t *led_label = lv_label_create(led_container);
+  lv_label_set_text(led_label, "Led");
+  lv_obj_set_style_text_font(led_label, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_color(led_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+  lv_obj_align(led_label, LV_ALIGN_LEFT_MID, 0, 0);
+  
+  settings_led_switch = lv_switch_create(led_container);
+  lv_obj_align(settings_led_switch, LV_ALIGN_RIGHT_MID, 0, 0);
+  lv_obj_add_event_cb(settings_led_switch, settings_led_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
+  if (app_state.led_enabled) {
+    lv_obj_add_state(settings_led_switch, LV_STATE_CHECKED);
+  }
+
+  // BT (Bluetooth) Toggle Row
+  lv_obj_t *bt_container = lv_obj_create(settings_page);
+  lv_obj_set_size(bt_container, 150, 50);
+  lv_obj_align(bt_container, LV_ALIGN_TOP_MID, 0, 200);
+  lv_obj_set_style_bg_color(bt_container, lv_color_hex(COLOR_BTN_SECONDARY), 0);
+  lv_obj_set_style_radius(bt_container, 8, 0);
+  lv_obj_set_style_border_width(bt_container, 0, 0);
+  lv_obj_set_style_pad_all(bt_container, 15, 0);
+  
+  lv_obj_t *bt_label = lv_label_create(bt_container);
+  lv_label_set_text(bt_label, "BT");
+  lv_obj_set_style_text_font(bt_label, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_color(bt_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+  lv_obj_align(bt_label, LV_ALIGN_LEFT_MID, 0, 0);
+  
+  settings_bt_switch = lv_switch_create(bt_container);
+  lv_obj_align(settings_bt_switch, LV_ALIGN_RIGHT_MID, 0, 0);
+  lv_obj_add_event_cb(settings_bt_switch, settings_bt_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
+  if (app_state.bluetooth_enabled) {
+    lv_obj_add_state(settings_bt_switch, LV_STATE_CHECKED);
+  }
+}
+
+void create_wire_settings_page() {
+  wire_settings_page = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(wire_settings_page, lv_pct(100), lv_pct(100));
+  lv_obj_set_style_bg_color(wire_settings_page, lv_color_hex(COLOR_BG_MAIN), 0);
+  lv_obj_set_style_border_width(wire_settings_page, 0, 0);
+  lv_obj_set_style_pad_all(wire_settings_page, 0, 0);
+  lv_obj_add_flag(wire_settings_page, LV_OBJ_FLAG_HIDDEN);
+
+  // Header with back button and battery
+  lv_obj_t *wire_header = create_page_header(wire_settings_page, "", true);
+  wire_header_label = lv_obj_get_child(wire_header, 1);
+  wire_battery_widget = lv_obj_get_child(wire_header, 2);
+
+  // Percentage display container (gray background like Figma)
+  lv_obj_t *percentage_container = lv_obj_create(wire_settings_page);
+  lv_obj_set_size(percentage_container, 120, 120);
+  lv_obj_align(percentage_container, LV_ALIGN_CENTER, 0, -10);
+  lv_obj_set_style_bg_color(percentage_container, lv_color_hex(COLOR_BTN_SECONDARY), 0);
+  lv_obj_set_style_radius(percentage_container, 15, 0);
+  lv_obj_set_style_border_width(percentage_container, 0, 0);
+  lv_obj_clear_flag(percentage_container, LV_OBJ_FLAG_SCROLLABLE);
+
+  // Large percentage number
+  wire_percentage_label = lv_label_create(percentage_container);
+  lv_label_set_text(wire_percentage_label, "20");
+  lv_obj_set_style_text_font(wire_percentage_label, &lv_font_montserrat_48, 0);
+  lv_obj_set_style_text_color(wire_percentage_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+  lv_obj_align(wire_percentage_label, LV_ALIGN_CENTER, 0, -10);
+
+  // "percent" text below
+  wire_percent_text_label = lv_label_create(percentage_container);
+  lv_label_set_text(wire_percent_text_label, "percent");
+  lv_obj_set_style_text_font(wire_percent_text_label, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(wire_percent_text_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+  lv_obj_align(wire_percent_text_label, LV_ALIGN_CENTER, 0, 25);
+
+  // Save Button
+  wire_save_btn = lv_btn_create(wire_settings_page);
+  lv_obj_set_size(wire_save_btn, 150, 46);
+  lv_obj_align(wire_save_btn, LV_ALIGN_BOTTOM_MID, 0, -16);
+  lv_obj_set_style_bg_color(wire_save_btn, lv_color_hex(COLOR_BTN_PRIMARY), 0);
+  lv_obj_add_event_cb(wire_save_btn, wire_save_cb, LV_EVENT_CLICKED, NULL);
+  
+  lv_obj_t *save_label = lv_label_create(wire_save_btn);
+  lv_label_set_text(save_label, "Save");
+  lv_obj_set_style_text_color(save_label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+  lv_obj_set_style_text_font(save_label, &lv_font_montserrat_20, 0);
+  lv_obj_center(save_label);
+
+  // Initialize display
+  update_wire_percentage_display();
+}
+
+void update_wire_percentage_display() {
+  if (wire_percentage_label) {
+    lv_label_set_text(wire_percentage_label, String(app_state.servo_wire_percentage).c_str());
+  }
+}
+
+// =============================================================================
+// EVENT CALLBACKS
+// =============================================================================
+
 // Event callbacks - SIMPLIFIED (removed detail navigation)
 void main_card_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_CLICKED && !main_is_animating) {
-    lv_obj_t *clicked_card = lv_event_get_target(e);
-    
-    for (int i = 0; i < main_total_cards; i++) {
-      if (main_card_objects[i] == clicked_card) {
-        MainCard current_card = main_cards[i];
-        DEBUG_PRINTF("Main card clicked: %s\n", current_card.title.c_str());
-        
-        if (current_card.target_state != STATE_SETTINGS) {
-          change_state(current_card.target_state);
-          show_current_page();
-        } else {
-          DEBUG_PRINTLN("Settings not implemented yet");
-        }
-        break;
-      }
+  lv_obj_t *clicked_card = lv_event_get_target(e);
+  
+  for (int i = 0; i < main_total_cards; i++) {
+    if (main_card_objects[i] == clicked_card) {
+      MainCard current_card = main_cards[i];
+      DEBUG_PRINTF("Main card clicked: %s\n", current_card.title.c_str());
+
+      // Egal ob Settings oder nicht → State wechseln
+      change_state(current_card.target_state);
+      show_current_page();
+
+      break;
     }
   }
+}
 }
 
 void template_back_cb(lv_event_t *e) {
@@ -828,12 +997,59 @@ void popup_close_cb(lv_event_t *e) {
   }
 }
 
+void settings_back_cb(lv_event_t *e) {
+  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+    DEBUG_PRINTLN("Settings back pressed");
+    go_back();
+  }
+}
+
+void settings_wire_cb(lv_event_t *e) {
+  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+    DEBUG_PRINTLN("Wire settings opened");
+    change_state(STATE_WIRE_SETTINGS);
+    show_current_page();
+  }
+}
+
+void settings_led_switch_cb(lv_event_t *e) {
+  if (lv_event_get_code(e) == LV_EVENT_VALUE_CHANGED) {
+    app_state.led_enabled = lv_obj_has_state(settings_led_switch, LV_STATE_CHECKED);
+    DEBUG_PRINTF("LED toggled: %s\n", app_state.led_enabled ? "ON" : "OFF");
+  }
+}
+
+void settings_bt_switch_cb(lv_event_t *e) {
+  if (lv_event_get_code(e) == LV_EVENT_VALUE_CHANGED) {
+    app_state.bluetooth_enabled = lv_obj_has_state(settings_bt_switch, LV_STATE_CHECKED);
+    DEBUG_PRINTF("Bluetooth toggled: %s\n", app_state.bluetooth_enabled ? "ON" : "OFF");
+  }
+}
+
+void wire_settings_back_cb(lv_event_t *e) {
+  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+    DEBUG_PRINTLN("Wire settings back pressed");
+    go_back();
+  }
+}
+
+void wire_save_cb(lv_event_t *e) {
+  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+    DEBUG_PRINTF("Wire settings saved: %d%%\n", app_state.servo_wire_percentage);
+    // Here you would save to EEPROM/preferences
+    go_back(); // Return to main settings
+  }
+}
+
 // Page management functions
+
 void hide_all_pages() {
   lv_obj_add_flag(main_page, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(template_page, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(interval_page, LV_OBJ_FLAG_HIDDEN);
   lv_obj_add_flag(loading_page, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_add_flag(settings_page, LV_OBJ_FLAG_HIDDEN);        // NEW
+  lv_obj_add_flag(wire_settings_page, LV_OBJ_FLAG_HIDDEN);   // NEW
 }
 
 void update_template_content(PageContent content) {
@@ -870,6 +1086,7 @@ void update_interval_content(PageContent content) {
   lv_label_set_text(interval_single_time, content.option1_time.c_str());
 }
 
+
 void show_current_page() {
   hide_all_pages();
   
@@ -900,22 +1117,24 @@ void show_current_page() {
       break;
       
     case STATE_INTERVAL:
-      app_state.current_option = 0; // Interval has only option 0
+      app_state.current_option = 0;
       update_interval_content(interval_content);
       lv_obj_clear_flag(interval_page, LV_OBJ_FLAG_HIDDEN);
-      DEBUG_PRINTLN("Showing interval page (single card)");
+      DEBUG_PRINTLN("Showing interval page");
       break;
       
-    case STATE_SETTINGS:
-      DEBUG_PRINTLN("Settings not implemented");
-      change_state(STATE_MAIN);
-      show_current_page();
+    case STATE_SETTINGS:  // NEW
+      lv_obj_clear_flag(settings_page, LV_OBJ_FLAG_HIDDEN);
+      DEBUG_PRINTLN("Showing settings page");
       break;
       
-    // REMOVED: STATE_DETAIL case - no more detail pages
+    case STATE_WIRE_SETTINGS:  // NEW
+      lv_obj_clear_flag(wire_settings_page, LV_OBJ_FLAG_HIDDEN);
+      DEBUG_PRINTLN("Showing wire settings page");
+      break;
   }
   
-  // Update battery widgets in all active pages (except Loading)
+  // Update battery widgets
   if (app_state.current_state != STATE_LOADING) {
     update_all_battery_widgets();
   }
@@ -924,23 +1143,22 @@ void show_current_page() {
 void ui_init() {
   DEBUG_PRINTLN("Initializing UI...");
   
-  // Battery System initialization
   if (app_state.current_state != STATE_LOADING) {
     battery_init();
   }
   
-  // Create loading page first if enabled
   if (LOADING_SCREEN_ENABLED) {
     create_loading_page();
   }
   
   create_main_page();
-  create_template_page();      // For Timer/T-Lapse (2 cards)
-  create_interval_page();      // Separate Interval page (1 card)
-  create_popup();              // REMOVED: create_detail_page()
+  create_template_page();
+  create_interval_page();
+  create_settings_page();        // NEW
+  create_wire_settings_page();   // NEW
+  create_popup();
   timer_system_init();
   
-  // Initialize battery system after UI creation if not in loading
   if (app_state.current_state != STATE_LOADING) {
     battery_init();
   }
@@ -948,7 +1166,6 @@ void ui_init() {
   show_current_page();
   
   DEBUG_PRINTLN("UI initialized successfully!");
-  DEBUG_PRINTLN("Navigation: Main → Timer/T-Lapse/Interval (no detail subsites)");
 }
 
 #endif // UI_H
