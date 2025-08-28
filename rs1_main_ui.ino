@@ -10,7 +10,8 @@ ESP32-C6 Camera Control App - Main Application (Fixed without Detail)
 #include "settings.h" 
 #include "ui.h"
 #include "battery.h"
-#include "timer_system.h" 
+#include "timer_system.h"
+#include "bluetooth.h"
  
 
 // =============================================================================
@@ -116,6 +117,7 @@ void app_init() {
   }
   
   ui_init();
+  bluetooth_init();
   
   DEBUG_PRINTLN("=== Application Ready ===");
   DEBUG_PRINTLN("Available Functions:");
@@ -171,6 +173,9 @@ void app_loop() {
     battery_system_update();
   }
   
+  // Bluetooth handler
+  bluetooth_update();
+
   // Timer system
   timer_system_update();
 
@@ -429,7 +434,43 @@ void handle_serial_commands() {
       Serial.println("  Main → Timer/T-Lapse/Interval/Settings");
       Serial.println("  Cards are no longer clickable (no detail pages)");
       Serial.println("  Use encoder to change values directly");
+      Serial.println("=== BLE Commands ===");
+      Serial.println("  ble enable      - Enable Bluetooth");
+      Serial.println("  ble disable     - Disable Bluetooth");
+      Serial.println("  ble status      - Show BLE status");
+      Serial.println("  ble test        - Send test response to connected app");
     }
+
+    // BLE test commands
+else if (command.startsWith("ble ")) {
+  String param = command.substring(4);
+  if (param == "enable" && !app_state.bluetooth_enabled) {
+    app_state.bluetooth_enabled = true;
+    bluetooth_enable();
+    save_app_state();
+    DEBUG_PRINTLN("Bluetooth enabled via serial");
+  }
+  else if (param == "disable" && app_state.bluetooth_enabled) {
+    app_state.bluetooth_enabled = false;
+    bluetooth_disable();
+    save_app_state();
+    DEBUG_PRINTLN("Bluetooth disabled via serial");
+  }
+  else if (param == "status") {
+    DEBUG_PRINTF("BLE State: %s, Connected: %s\n", 
+                 ble_state.enabled ? "ENABLED" : "DISABLED",
+                 ble_state.client_connected ? "YES" : "NO");
+  }
+  else if (param == "test") {
+    if (ble_state.client_connected) {
+      send_ble_response("TEST:Device_responding");
+      DEBUG_PRINTLN("Test response sent to BLE client");
+    } else {
+      DEBUG_PRINTLN("No BLE client connected");
+    }
+  }
+}
+
     else {
       Serial.println("Unknown command. Type 'help' for available commands.");
     }

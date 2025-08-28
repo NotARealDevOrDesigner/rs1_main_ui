@@ -14,6 +14,10 @@ ui.h - Simplified UI System (Main → Sub, no Detail pages)
 #include "battery.h"
 #include "timer_system.h"
 
+// Forward declarations für Bluetooth
+extern void bluetooth_enable();
+extern void bluetooth_disable();
+
 // =============================================================================
 // STRUCTURES
 // =============================================================================
@@ -28,8 +32,13 @@ struct MainCard {
 // =============================================================================
 #ifndef UI_GLOBALS_DEFINED
 #define UI_GLOBALS_DEFINED
+
 // External
 extern void save_app_state();
+
+// Forward declarations für Bluetooth
+extern bool app_state_bluetooth_enabled;
+
 
 // Loading screen objects
 lv_obj_t *loading_page;
@@ -272,6 +281,18 @@ lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back
   } else {
     battery_widget = create_battery_widget(header, 118, 12);
   }
+
+  // BT Indikator hinzufügen (blauer Punkt wenn BT aktiviert)
+  if (app_state.bluetooth_enabled) {
+    lv_obj_t *bt_indicator = lv_obj_create(header);
+    lv_obj_set_size(bt_indicator, 8, 8);
+    lv_obj_align(bt_indicator, show_back_btn ? LV_ALIGN_RIGHT_MID : LV_ALIGN_TOP_RIGHT, 
+                 show_back_btn ? -45 : -45, show_back_btn ? 0 : 8);
+    lv_obj_set_style_bg_color(bt_indicator, lv_color_hex(COLOR_BLE_INDICATOR), 0);
+    lv_obj_set_style_border_width(bt_indicator, 0, 0);
+    lv_obj_set_style_radius(bt_indicator, 4, 0);
+    lv_obj_clear_flag(bt_indicator, LV_OBJ_FLAG_SCROLLABLE);
+  }
   
   return header;
 }
@@ -432,6 +453,17 @@ void create_main_page() {
   lv_obj_align(main_title, LV_ALIGN_TOP_LEFT, 8, 8);
 
   main_battery_widget = create_battery_widget(main_page, 118, 10);
+
+  // BT Indikator für Main Page
+  if (app_state.bluetooth_enabled) {
+    lv_obj_t *main_bt_indicator = lv_obj_create(main_page);
+    lv_obj_set_size(main_bt_indicator, 8, 8);
+    lv_obj_align(main_bt_indicator, LV_ALIGN_TOP_RIGHT, -45, 8);
+    lv_obj_set_style_bg_color(main_bt_indicator, lv_color_hex(COLOR_BLE_INDICATOR), 0);
+    lv_obj_set_style_border_width(main_bt_indicator, 0, 0);
+    lv_obj_set_style_radius(main_bt_indicator, 4, 0);
+    lv_obj_clear_flag(main_bt_indicator, LV_OBJ_FLAG_SCROLLABLE);
+  }
 
   main_card_container = lv_obj_create(main_page);
   lv_obj_set_size(main_card_container, 150, 210);
@@ -1034,10 +1066,25 @@ void settings_led_switch_cb(lv_event_t *e) {
   }
 }
 
+
 void settings_bt_switch_cb(lv_event_t *e) {
   if (lv_event_get_code(e) == LV_EVENT_VALUE_CHANGED) {
     app_state.bluetooth_enabled = lv_obj_has_state(settings_bt_switch, LV_STATE_CHECKED);
+    
+    // BLE System entsprechend aktivieren/deaktivieren
+    if (app_state.bluetooth_enabled) {
+      bluetooth_enable();
+    } else {
+      bluetooth_disable();
+    }
+    
+    if (settings_initialized) {
+      save_app_state();
+    }
     DEBUG_PRINTF("Bluetooth toggled: %s\n", app_state.bluetooth_enabled ? "ON" : "OFF");
+    
+    // UI neu laden um BT Indikator zu aktualisieren
+    show_current_page();
   }
 }
 

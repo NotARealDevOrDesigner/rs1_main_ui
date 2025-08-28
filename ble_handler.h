@@ -1,1 +1,0 @@
-bool ble_connected = false;

@@ -100,6 +100,8 @@ extern int servoAbsoluteMaxPosition;      // Runtime variable for absolute max
 // =============================================================================
 // COLOR PALETTE
 // =============================================================================
+#define COLOR_BLE_INDICATOR   0x007BFF    // Blauer Punkt für BT Status
+
 #define COLOR_BG_MAIN         0xF4F4F4
 #define COLOR_BG_TEMPLATE     0xF4F4F4
 #define COLOR_BG_DETAIL       0xF4F4F4

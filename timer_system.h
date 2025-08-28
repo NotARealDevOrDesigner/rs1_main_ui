@@ -97,6 +97,9 @@ extern lv_obj_t *interval_overlay_cancel_btn;
 // FUNCTION DECLARATIONS
 // =============================================================================
 
+// Bluetooth
+extern void send_ble_response(String response);
+
 // System Functions
 void timer_system_init();
 void timer_system_update();

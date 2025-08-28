@@ -11,6 +11,9 @@ state_machine.h - Simplified State Management System (No Detail States)
 #include "config.h"
 
 
+// Forward declarations für Bluetooth (falls needed)
+extern void save_app_state();
+// Forward declarations timer saving system
 extern bool settings_initialized;
 extern void save_timer_values();
 // =============================================================================
