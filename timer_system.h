@@ -624,7 +624,7 @@ void create_timer_overlays() {
   lv_obj_clear_flag(interval_overlay, LV_OBJ_FLAG_SCROLLABLE);
   
   lv_obj_t *interval_started_label = lv_label_create(interval_overlay);
-  lv_label_set_text(interval_started_label, "Started Since");
+  lv_label_set_text(interval_started_label, "Started");
   lv_obj_set_style_text_font(interval_started_label, &lv_font_montserrat_24, 0);
   lv_obj_set_style_text_color(interval_started_label, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
   lv_obj_align(interval_started_label, LV_ALIGN_TOP_MID, 0, 24);
