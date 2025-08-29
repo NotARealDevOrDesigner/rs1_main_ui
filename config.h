@@ -94,7 +94,7 @@ extern int servoAbsoluteMaxPosition;      // Runtime variable for absolute max
 // LOADING SCREEN CONFIGURATION
 // =============================================================================
 #define LOADING_SCREEN_ENABLED    true      // Set to false to skip loading screen for debugging
-#define LOADING_DURATION_MS       5000      // 5 seconds loading time
+#define LOADING_DURATION_MS       1000      // 1 seconds loading time
 #define LOADING_SPINNER_SPEED     200       // Animation speed in ms
 
 // =============================================================================

@@ -39,6 +39,38 @@ extern void save_app_state();
 // Forward declarations für Bluetooth
 extern bool app_state_bluetooth_enabled;
 
+// BT Indicator Configuration
+struct BTIndicatorConfig {
+  // Erscheinungsbild
+  int size_width = 12;
+  int size_height = 12;
+  int radius = 6;
+  uint32_t color = COLOR_BLE_INDICATOR;
+  
+  // Animation
+  int blink_interval_ms = 1000;
+  int opacity_min = LV_OPA_30;
+  int opacity_max = LV_OPA_COVER;
+  
+  // Positionierung - Standard für alle Seiten
+  struct {
+    int main_x_offset = -45;
+    int main_y_offset = 8;
+    int header_x_offset = -45;  // Für alle Header-basierten Seiten
+    int header_y_offset = 0;
+  } position;
+  
+  // Spezifische Überschreibungen pro Seite (optional)
+  struct {
+    bool use_custom_positions = true;
+    struct { int x = -45; int y = 12; } main;
+    struct { int x = -55; int y = -5; } timer;
+    struct { int x = -55; int y = -5; } tlapse;
+    struct { int x = -55; int y = -4; } interval;
+    struct { int x = -55; int y = -4; } settings;
+    struct { int x = -55; int y = -4; } wire_settings;
+  } custom_positions;
+} bt_config;
 
 // Loading screen objects
 lv_obj_t *loading_page;
@@ -71,6 +103,16 @@ lv_obj_t *main_dot1, *main_dot2, *main_dot3, *main_dot4;
 lv_obj_t *main_battery_widget;
 lv_obj_t *template_battery_widget;
 lv_obj_t *interval_battery_widget;
+
+// BT INDICATOR SYSTEM
+lv_obj_t *main_bt_indicator = nullptr;
+lv_obj_t *template_bt_indicator = nullptr;
+lv_obj_t *interval_bt_indicator = nullptr; 
+lv_obj_t *settings_bt_indicator = nullptr;
+lv_obj_t *wire_bt_indicator = nullptr;
+
+lv_timer_t *bt_blink_timer = nullptr;
+bool bt_indicator_visible = true;
 
 // Main page state
 int main_current_card = 0;
@@ -180,6 +222,15 @@ void settings_bt_switch_cb(lv_event_t *e);
 void wire_settings_back_cb(lv_event_t *e);
 void wire_save_cb(lv_event_t *e);
 
+// BT indicator functions
+void bt_blink_timer_cb(lv_timer_t *timer);
+lv_obj_t* create_bt_indicator(lv_obj_t *parent, int x_offset, int y_offset);
+void delete_all_bt_indicators();
+void start_bt_indicator_system();
+void stop_bt_indicator_system();
+void recreate_bt_indicators_for_current_page();
+void update_bt_indicator_system();
+
 // =============================================================================
 // IMPLEMENTATIONS
 // =============================================================================
@@ -202,6 +253,197 @@ void cleanup_loading_screen() {
   if (loading_dots_timer) {
     lv_timer_del(loading_dots_timer);
     loading_dots_timer = NULL;
+  }
+}
+
+void bt_blink_timer_cb(lv_timer_t *timer) {
+  bt_indicator_visible = !bt_indicator_visible;
+  int target_opacity = bt_indicator_visible ? bt_config.opacity_max : bt_config.opacity_min;
+  
+  if (main_bt_indicator) {
+    lv_obj_set_style_opa(main_bt_indicator, target_opacity, 0);
+  }
+  if (template_bt_indicator) {
+    lv_obj_set_style_opa(template_bt_indicator, target_opacity, 0);
+  }
+  if (interval_bt_indicator) {
+    lv_obj_set_style_opa(interval_bt_indicator, target_opacity, 0);
+  }
+  if (settings_bt_indicator) {
+    lv_obj_set_style_opa(settings_bt_indicator, target_opacity, 0);
+  }
+  if (wire_bt_indicator) {
+    lv_obj_set_style_opa(wire_bt_indicator, target_opacity, 0);
+  }
+}
+
+lv_obj_t* create_bt_indicator(lv_obj_t *parent) {
+  if (!app_state.bluetooth_enabled) {
+    return nullptr;
+  }
+  
+  lv_obj_t *indicator = lv_obj_create(parent);
+  lv_obj_set_size(indicator, bt_config.size_width, bt_config.size_height);
+  lv_obj_set_style_bg_color(indicator, lv_color_hex(bt_config.color), 0);
+  lv_obj_set_style_border_width(indicator, 0, 0);
+  lv_obj_set_style_radius(indicator, bt_config.radius, 0);
+  lv_obj_clear_flag(indicator, LV_OBJ_FLAG_SCROLLABLE);
+  
+  return indicator;
+}
+
+void delete_all_bt_indicators() {
+  if (main_bt_indicator) {
+    lv_obj_del(main_bt_indicator);
+    main_bt_indicator = nullptr;
+  }
+  if (template_bt_indicator) {
+    lv_obj_del(template_bt_indicator);
+    template_bt_indicator = nullptr;
+  }
+  if (interval_bt_indicator) {
+    lv_obj_del(interval_bt_indicator);
+    interval_bt_indicator = nullptr;
+  }
+  if (settings_bt_indicator) {
+    lv_obj_del(settings_bt_indicator);
+    settings_bt_indicator = nullptr;
+  }
+  if (wire_bt_indicator) {
+    lv_obj_del(wire_bt_indicator);
+    wire_bt_indicator = nullptr;
+  }
+}
+
+void start_bt_indicator_system() {
+  if (!app_state.bluetooth_enabled) {
+    return;
+  }
+  
+  if (!bt_blink_timer) {
+    bt_blink_timer = lv_timer_create(bt_blink_timer_cb, bt_config.blink_interval_ms, NULL);
+  }
+}
+
+void stop_bt_indicator_system() {
+  if (bt_blink_timer) {
+    lv_timer_del(bt_blink_timer);
+    bt_blink_timer = nullptr;
+  }
+  delete_all_bt_indicators();
+}
+
+void recreate_bt_indicators_for_current_page() {
+  delete_all_bt_indicators();
+  
+  if (!app_state.bluetooth_enabled) {
+    return;
+  }
+  
+  int x_offset, y_offset;
+  lv_align_t align_type;
+  
+  switch (app_state.current_state) {
+    case STATE_MAIN:
+      if (main_page) {
+        if (bt_config.custom_positions.use_custom_positions) {
+          x_offset = bt_config.custom_positions.main.x;
+          y_offset = bt_config.custom_positions.main.y;
+        } else {
+          x_offset = bt_config.position.main_x_offset;
+          y_offset = bt_config.position.main_y_offset;
+        }
+        
+        main_bt_indicator = create_bt_indicator(main_page);
+        lv_obj_align(main_bt_indicator, LV_ALIGN_TOP_RIGHT, x_offset, y_offset);
+      }
+      break;
+      
+    case STATE_TIMER:
+    case STATE_TLAPSE:
+      if (template_page) {
+        lv_obj_t *header = lv_obj_get_child(template_page, 0);
+        if (header) {
+          if (bt_config.custom_positions.use_custom_positions) {
+            x_offset = (app_state.current_state == STATE_TIMER) ? 
+                      bt_config.custom_positions.timer.x : 
+                      bt_config.custom_positions.tlapse.x;
+            y_offset = (app_state.current_state == STATE_TIMER) ? 
+                      bt_config.custom_positions.timer.y : 
+                      bt_config.custom_positions.tlapse.y;
+          } else {
+            x_offset = bt_config.position.header_x_offset;
+            y_offset = bt_config.position.header_y_offset;
+          }
+          
+          template_bt_indicator = create_bt_indicator(header);
+          lv_obj_align(template_bt_indicator, LV_ALIGN_RIGHT_MID, x_offset, y_offset);
+        }
+      }
+      break;
+      
+    case STATE_INTERVAL:
+      if (interval_page) {
+        lv_obj_t *header = lv_obj_get_child(interval_page, 0);
+        if (header) {
+          if (bt_config.custom_positions.use_custom_positions) {
+            x_offset = bt_config.custom_positions.interval.x;
+            y_offset = bt_config.custom_positions.interval.y;
+          } else {
+            x_offset = bt_config.position.header_x_offset;
+            y_offset = bt_config.position.header_y_offset;
+          }
+          
+          interval_bt_indicator = create_bt_indicator(header);
+          lv_obj_align(interval_bt_indicator, LV_ALIGN_RIGHT_MID, x_offset, y_offset);
+        }
+      }
+      break;
+      
+    case STATE_SETTINGS:
+      if (settings_page) {
+        lv_obj_t *header = lv_obj_get_child(settings_page, 0);
+        if (header) {
+          if (bt_config.custom_positions.use_custom_positions) {
+            x_offset = bt_config.custom_positions.settings.x;
+            y_offset = bt_config.custom_positions.settings.y;
+          } else {
+            x_offset = bt_config.position.header_x_offset;
+            y_offset = bt_config.position.header_y_offset;
+          }
+          
+          settings_bt_indicator = create_bt_indicator(header);
+          lv_obj_align(settings_bt_indicator, LV_ALIGN_RIGHT_MID, x_offset, y_offset);
+        }
+      }
+      break;
+      
+    case STATE_WIRE_SETTINGS:
+      if (wire_settings_page) {
+        lv_obj_t *header = lv_obj_get_child(wire_settings_page, 0);
+        if (header) {
+          if (bt_config.custom_positions.use_custom_positions) {
+            x_offset = bt_config.custom_positions.wire_settings.x;
+            y_offset = bt_config.custom_positions.wire_settings.y;
+          } else {
+            x_offset = bt_config.position.header_x_offset;
+            y_offset = bt_config.position.header_y_offset;
+          }
+          
+          wire_bt_indicator = create_bt_indicator(header);
+          lv_obj_align(wire_bt_indicator, LV_ALIGN_RIGHT_MID, x_offset, y_offset);
+        }
+      }
+      break;
+  }
+}
+
+void update_bt_indicator_system() {
+  stop_bt_indicator_system();
+  
+  if (app_state.bluetooth_enabled) {
+    recreate_bt_indicators_for_current_page();
+    start_bt_indicator_system();
   }
 }
 
@@ -282,17 +524,6 @@ lv_obj_t* create_page_header(lv_obj_t *parent, const char* title, bool show_back
     battery_widget = create_battery_widget(header, 118, 12);
   }
 
-  // BT Indikator hinzufügen (blauer Punkt wenn BT aktiviert)
-  if (app_state.bluetooth_enabled) {
-    lv_obj_t *bt_indicator = lv_obj_create(header);
-    lv_obj_set_size(bt_indicator, 8, 8);
-    lv_obj_align(bt_indicator, show_back_btn ? LV_ALIGN_RIGHT_MID : LV_ALIGN_TOP_RIGHT, 
-                 show_back_btn ? -45 : -45, show_back_btn ? 0 : 8);
-    lv_obj_set_style_bg_color(bt_indicator, lv_color_hex(COLOR_BLE_INDICATOR), 0);
-    lv_obj_set_style_border_width(bt_indicator, 0, 0);
-    lv_obj_set_style_radius(bt_indicator, 4, 0);
-    lv_obj_clear_flag(bt_indicator, LV_OBJ_FLAG_SCROLLABLE);
-  }
   
   return header;
 }
@@ -453,17 +684,6 @@ void create_main_page() {
   lv_obj_align(main_title, LV_ALIGN_TOP_LEFT, 8, 8);
 
   main_battery_widget = create_battery_widget(main_page, 118, 10);
-
-  // BT Indikator für Main Page
-  if (app_state.bluetooth_enabled) {
-    lv_obj_t *main_bt_indicator = lv_obj_create(main_page);
-    lv_obj_set_size(main_bt_indicator, 8, 8);
-    lv_obj_align(main_bt_indicator, LV_ALIGN_TOP_RIGHT, -45, 8);
-    lv_obj_set_style_bg_color(main_bt_indicator, lv_color_hex(COLOR_BLE_INDICATOR), 0);
-    lv_obj_set_style_border_width(main_bt_indicator, 0, 0);
-    lv_obj_set_style_radius(main_bt_indicator, 4, 0);
-    lv_obj_clear_flag(main_bt_indicator, LV_OBJ_FLAG_SCROLLABLE);
-  }
 
   main_card_container = lv_obj_create(main_page);
   lv_obj_set_size(main_card_container, 150, 210);
@@ -864,6 +1084,7 @@ void create_settings_page() {
   lv_obj_set_style_radius(led_container, 8, 0);
   lv_obj_set_style_border_width(led_container, 0, 0);
   lv_obj_set_style_pad_all(led_container, 15, 0);
+  lv_obj_set_scrollbar_mode(led_container, LV_SCROLLBAR_MODE_OFF);
   
   lv_obj_t *led_label = lv_label_create(led_container);
   lv_label_set_text(led_label, "Led");
@@ -886,7 +1107,8 @@ void create_settings_page() {
   lv_obj_set_style_radius(bt_container, 8, 0);
   lv_obj_set_style_border_width(bt_container, 0, 0);
   lv_obj_set_style_pad_all(bt_container, 15, 0);
-  
+  lv_obj_set_scrollbar_mode(bt_container, LV_SCROLLBAR_MODE_OFF);  
+
   lv_obj_t *bt_label = lv_label_create(bt_container);
   lv_label_set_text(bt_label, "BT");
   lv_obj_set_style_text_font(bt_label, &lv_font_montserrat_20, 0);
@@ -1081,10 +1303,11 @@ void settings_bt_switch_cb(lv_event_t *e) {
     if (settings_initialized) {
       save_app_state();
     }
-    DEBUG_PRINTF("Bluetooth toggled: %s\n", app_state.bluetooth_enabled ? "ON" : "OFF");
     
-    // UI neu laden um BT Indikator zu aktualisieren
-    show_current_page();
+    // BT-Indikator System aktualisieren
+    update_bt_indicator_system();
+    
+    DEBUG_PRINTF("Bluetooth toggled: %s\n", app_state.bluetooth_enabled ? "ON" : "OFF");
   }
 }
 
@@ -1152,13 +1375,13 @@ void update_interval_content(PageContent content) {
 
 void show_current_page() {
   hide_all_pages();
-  
+ 
   switch (app_state.current_state) {
     case STATE_LOADING:
       lv_obj_clear_flag(loading_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing loading page");
       break;
-      
+     
     case STATE_MAIN:
       if (LOADING_SCREEN_ENABLED) {
         cleanup_loading_screen();
@@ -1166,40 +1389,44 @@ void show_current_page() {
       lv_obj_clear_flag(main_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing main page");
       break;
-      
+     
     case STATE_TIMER:
       init_template_content(timer_content);
       lv_obj_clear_flag(template_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing timer template");
       break;
-      
+     
     case STATE_TLAPSE:
       init_template_content(tlapse_content);
       lv_obj_clear_flag(template_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing time-lapse template");
       break;
-      
+     
     case STATE_INTERVAL:
       app_state.current_option = 0;
       update_interval_content(interval_content);
       lv_obj_clear_flag(interval_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing interval page");
       break;
-      
-    case STATE_SETTINGS:  // NEW
+     
+    case STATE_SETTINGS:
       lv_obj_clear_flag(settings_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing settings page");
       break;
-      
-    case STATE_WIRE_SETTINGS:  // NEW
+     
+    case STATE_WIRE_SETTINGS:
       lv_obj_clear_flag(wire_settings_page, LV_OBJ_FLAG_HIDDEN);
       DEBUG_PRINTLN("Showing wire settings page");
       break;
   }
-  
-  // Update battery widgets
+ 
+  // Update battery widgets and BT indicators
   if (app_state.current_state != STATE_LOADING) {
     update_all_battery_widgets();
+    recreate_bt_indicators_for_current_page();
+    if (app_state.bluetooth_enabled) {
+      start_bt_indicator_system();
+    }
   }
 }
 
@@ -1228,6 +1455,8 @@ void ui_init() {
   
   show_current_page();
   
+  update_bt_indicator_system();
+
   DEBUG_PRINTLN("UI initialized successfully!");
 }
 
