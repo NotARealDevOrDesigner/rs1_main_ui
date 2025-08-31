@@ -131,8 +131,8 @@ AppStateData app_state = {
   "Loading...", 
   0,      // loading_start_time
   false,   // encoder_editing_mode
-  true,   // DIESE 3 ZEILEN HINZUFÜGEN
-  false,  
+  true,   // led toggle
+  true,  // bluetooth toggle
   100     
 };
 
