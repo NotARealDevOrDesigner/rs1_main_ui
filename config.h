@@ -43,7 +43,7 @@ extern int servoAbsoluteMaxPosition;      // Runtime variable for absolute max
 #define ENCODER_PIN_B         7      // Rotary encoder DT pin (pin B)  
 #define ENCODER_PIN_BUTTON    6      // Rotary encoder push button (optional)
 #define ENCODER_DEBOUNCE_MS   50     // Debounce time in milliseconds
-#define ENCODER_STEPS_PER_CLICK 4    // Steps per physical click (depends on encoder)
+#define ENCODER_STEPS_PER_CLICK 1    // Steps per physical click (depends on encoder)
 
 // =============================================================================
 // VALUE EDITING CONFIGURATION
@@ -54,8 +54,8 @@ extern int servoAbsoluteMaxPosition;      // Runtime variable for absolute max
 #define VALUE_MAX_SECONDS       3599 // Maximum value (59:59)
 
 // Adaptive encoder configuration - VEREINFACHT
-#define ENCODER_SPEED_FAST_MS     80   // Fast rotation threshold (time between clicks)
-#define ENCODER_SPEED_MEDIUM_MS   250  // Medium rotation threshold
+#define ENCODER_SPEED_FAST_MS     40   // Fast rotation threshold (time between clicks)
+#define ENCODER_SPEED_MEDIUM_MS   120  // Medium rotation threshold
 // Alles >= MEDIUM_MS = Slow (1er Schritte)
 
 // Schritt-Größen - NUR NOCH 3 STUFEN
@@ -65,12 +65,12 @@ extern int servoAbsoluteMaxPosition;      // Runtime variable for absolute max
 
 // Hysterese für stabiles Verhalten
 #define ENCODER_HYSTERESIS_ENABLED true
-#define ENCODER_HYSTERESIS_FACTOR  1.3f  // 30% Hysterese
+#define ENCODER_HYSTERESIS_FACTOR  1.5f  // 30% Hysterese
 
 // Glättung/Filterung
 #define ENCODER_SMOOTHING_ENABLED true
-#define ENCODER_SMOOTHING_SAMPLES 3     // Durchschnitt über 3 Messungen
-#define ENCODER_MIN_CHANGE_TIME   15    // Mindestens 15ms zwischen Änderungen
+#define ENCODER_SMOOTHING_SAMPLES 5     // Durchschnitt über 3 Messungen
+#define ENCODER_MIN_CHANGE_TIME   20    // Mindestens 15ms zwischen Änderungen
 
 // Value display format
 #define VALUE_FORMAT_MM_SS      0    // MM:SS format (minutes:seconds)

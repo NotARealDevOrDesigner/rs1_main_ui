@@ -1,6 +1,6 @@
 /*
 =============================================================================
-hardware.h - Hardware Abstraction Layer with Rotary Encoder Support
+hardware.h - Hardware Abstraction Layer with RotaryEncoder Library
 =============================================================================
 */
 
@@ -11,6 +11,7 @@ hardware.h - Hardware Abstraction Layer with Rotary Encoder Support
 #include <lvgl.h>
 #include "esp_lcd_touch_axs5106l.h"
 #include <Arduino_GFX_Library.h>
+#include <RotaryEncoder.h>  // NEW: Include RotaryEncoder library
 #include "config.h"
 
 // =============================================================================
@@ -27,22 +28,19 @@ extern lv_color_t *disp_draw_buf;
 extern lv_disp_drv_t disp_drv;
 
 // =============================================================================
-// ROTARY ENCODER VARIABLES
+// ROTARY ENCODER VARIABLES - REFACTORED WITH LIBRARY
 // =============================================================================
-extern volatile int encoder_position;
+extern RotaryEncoder *encoder;  // NEW: RotaryEncoder library instance
 extern volatile bool encoder_button_pressed;
-extern volatile unsigned long last_encoder_time;
-extern int last_encoder_position;
 extern unsigned long last_button_press;
 
-// Adaptive encoder variables
+// Adaptive encoder variables - KEEPING EXISTING FUNCTIONALITY
 extern unsigned long last_encoder_change_time;
 extern int encoder_speed_step_size;
-
-// Erweiterte Encoder-Variablen für Hysterese und Glättung
 extern unsigned long encoder_smoothing_buffer[ENCODER_SMOOTHING_SAMPLES];
 extern int encoder_smoothing_index;
 extern int current_speed_level;
+extern int last_encoder_position;  // Track last position for delta calculation
 
 // =============================================================================
 // HARDWARE FUNCTIONS
@@ -52,17 +50,16 @@ void lcd_reg_init();
 void my_disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p);
 void touchpad_read_cb(lv_indev_drv_t *indev_drv, lv_indev_data_t *data);
 
-// Rotary encoder functions
+// Rotary encoder functions - UPDATED FOR LIBRARY
 void encoder_init();
-void encoder_init_extended();  // Neue erweiterte Initialisierung
+void encoder_init_extended();
 int32_t get_encoder_delta();
-int32_t get_adaptive_encoder_delta();  // Verbesserte adaptive Funktion
+int32_t get_adaptive_encoder_delta();
 bool is_encoder_button_pressed();
-void encoder_isr_a();
-void encoder_isr_b();
-void encoder_button_isr();
+void encoder_button_isr();  // Only button ISR needed now
+void check_encoder_position();  // NEW: Library interrupt handler
 
-// Hilfsfunktionen für erweiterte Encoder-Features
+// Helper functions for extended encoder features - KEEPING EXISTING
 unsigned long get_smoothed_encoder_time(unsigned long current_time);
 int determine_speed_level(unsigned long time_since_change, int current_level);
 
@@ -91,56 +88,26 @@ lv_color_t *disp_draw_buf;
 lv_disp_drv_t disp_drv;
 
 // =============================================================================
-// ROTARY ENCODER IMPLEMENTATION - ZURÜCK ZUR EINFACHEN VERSION
+// ROTARY ENCODER IMPLEMENTATION - REFACTORED WITH LIBRARY
 // =============================================================================
-volatile int encoder_position = 0;
+RotaryEncoder *encoder = nullptr;  // NEW: Library instance
 volatile bool encoder_button_pressed = false;
-volatile unsigned long last_encoder_time = 0;
-int last_encoder_position = 0;
 unsigned long last_button_press = 0;
 
-// Adaptive encoder variables
+// Adaptive encoder variables - KEEPING ALL EXISTING FUNCTIONALITY
 unsigned long last_encoder_change_time = 0;
 int encoder_speed_step_size = 1;
-
-// Erweiterte Encoder-Variablen
 unsigned long encoder_smoothing_buffer[ENCODER_SMOOTHING_SAMPLES];
 int encoder_smoothing_index = 0;
-int current_speed_level = 2; // Start bei langsamster Stufe (0=schnellste, 2=langsamste)
+int current_speed_level = 2; // Start at slowest level
+int last_encoder_position = 0;  // Track position for delta calculation
 
-// EINFACHE ISR-FUNKTIONEN (wie ursprünglich)
-void IRAM_ATTR encoder_isr_a() {
-  unsigned long current_time = millis();
-  if (current_time - last_encoder_time < 5) return; // Einfache 5ms Entprellung
-  
-  int a = digitalRead(ENCODER_PIN_A);
-  int b = digitalRead(ENCODER_PIN_B);
-  
-  if (a == b) {
-    encoder_position++;
-  } else {
-    encoder_position--;
-  }
-  
-  last_encoder_time = current_time;
+// NEW: Interrupt handler for RotaryEncoder library
+void IRAM_ATTR check_encoder_position() {
+  encoder->tick(); // Library handles all the logic
 }
 
-void IRAM_ATTR encoder_isr_b() {
-  unsigned long current_time = millis();
-  if (current_time - last_encoder_time < 5) return; // Einfache 5ms Entprellung
-  
-  int a = digitalRead(ENCODER_PIN_A);
-  int b = digitalRead(ENCODER_PIN_B);
-  
-  if (a != b) {
-    encoder_position++;
-  } else {
-    encoder_position--;
-  }
-  
-  last_encoder_time = current_time;
-}
-
+// Button ISR - UNCHANGED
 void IRAM_ATTR encoder_button_isr() {
   unsigned long current_time = millis();
   if (current_time - last_button_press > ENCODER_DEBOUNCE_MS) {
@@ -150,40 +117,40 @@ void IRAM_ATTR encoder_button_isr() {
 }
 
 void encoder_init() {
-  DEBUG_PRINTLN("Initializing rotary encoder...");
+  DEBUG_PRINTLN("Initializing rotary encoder with RotaryEncoder library...");
   
-  // Configure encoder pins
-  pinMode(ENCODER_PIN_A, INPUT_PULLUP);
-  pinMode(ENCODER_PIN_B, INPUT_PULLUP);
+  // NEW: Create RotaryEncoder instance
+  // Use TWO03 mode for most common encoders (signals both LOW or HIGH in latch position)
+  encoder = new RotaryEncoder(ENCODER_PIN_A, ENCODER_PIN_B, RotaryEncoder::LatchMode::TWO03);
+  
+  // Configure button pin
   pinMode(ENCODER_PIN_BUTTON, INPUT_PULLUP);
   
-  // Attach interrupts
-  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), encoder_isr_a, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_B), encoder_isr_b, CHANGE);
+  // NEW: Attach interrupts using library approach
+  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), check_encoder_position, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_B), check_encoder_position, CHANGE);
   attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_BUTTON), encoder_button_isr, FALLING);
   
   // Initialize variables
-  encoder_position = 0;
   last_encoder_position = 0;
   encoder_button_pressed = false;
-  last_encoder_time = 0;
   last_button_press = 0;
   
-  DEBUG_PRINTF("Encoder initialized on pins A:%d, B:%d, BTN:%d\n", 
+  DEBUG_PRINTF("RotaryEncoder library initialized on pins A:%d, B:%d, BTN:%d\n", 
                ENCODER_PIN_A, ENCODER_PIN_B, ENCODER_PIN_BUTTON);
 }
 
 void encoder_init_extended() {
-  // Bestehende Initialisierung aufrufen
+  // Call basic initialization
   encoder_init();
   
-  // Neue Variablen initialisieren
-  current_speed_level = 2; // Start bei langsamster Stufe (0=schnell, 1=mittel, 2=langsam)
+  // Initialize extended variables - KEEPING ALL EXISTING LOGIC
+  current_speed_level = 2; // Start at slowest level
   encoder_smoothing_index = 0;
   
-  // Glättungspuffer initialisieren
+  // Initialize smoothing buffer
   for (int i = 0; i < ENCODER_SMOOTHING_SAMPLES; i++) {
-    encoder_smoothing_buffer[i] = 1000; // Hoher Startwert = langsam
+    encoder_smoothing_buffer[i] = 1000; // High start value = slow
   }
   
   ENCODER_DEBUG_PRINTLN("Extended encoder features initialized");
@@ -193,25 +160,29 @@ void encoder_init_extended() {
 }
 
 int32_t get_encoder_delta() {
-  // Calculate the change in encoder position
-  int current_pos = encoder_position / ENCODER_STEPS_PER_CLICK;
-  int32_t delta = current_pos - last_encoder_position;
+  // NEW: Use library's getPosition() instead of manual tracking
+  encoder->tick(); // Ensure latest state is read
+  int current_pos = encoder->getPosition();
+  
+  // Calculate delta from last known position
+  int32_t raw_delta = current_pos - last_encoder_position;
   last_encoder_position = current_pos;
+  
+  // Convert library steps to logical clicks using ENCODER_STEPS_PER_CLICK
+  int32_t delta = raw_delta / ENCODER_STEPS_PER_CLICK;
   
   return delta;
 }
 
-// Hilfsfunktion: Berechne geglättete Zeit
+// Helper functions - KEEPING ALL EXISTING LOGIC
 unsigned long get_smoothed_encoder_time(unsigned long current_time) {
   if (!ENCODER_SMOOTHING_ENABLED) {
     return current_time;
   }
   
-  // Zeit in Puffer speichern
   encoder_smoothing_buffer[encoder_smoothing_index] = current_time;
   encoder_smoothing_index = (encoder_smoothing_index + 1) % ENCODER_SMOOTHING_SAMPLES;
   
-  // Durchschnitt berechnen
   unsigned long sum = 0;
   for (int i = 0; i < ENCODER_SMOOTHING_SAMPLES; i++) {
     sum += encoder_smoothing_buffer[i];
@@ -219,81 +190,73 @@ unsigned long get_smoothed_encoder_time(unsigned long current_time) {
   return sum / ENCODER_SMOOTHING_SAMPLES;
 }
 
-// Hilfsfunktion: Bestimme Geschwindigkeitslevel mit Hysterese - NUR 3 STUFEN
 int determine_speed_level(unsigned long time_since_change, int current_level) {
-  // Standard-Schwellenwerte
+  // KEEPING ALL EXISTING HYSTERESIS AND SPEED LOGIC
   unsigned long fast_threshold = ENCODER_SPEED_FAST_MS;      // 80ms
   unsigned long medium_threshold = ENCODER_SPEED_MEDIUM_MS;  // 250ms
   
-  // Hysterese anwenden (nur bei Übergang zu langsamerer Stufe)
   if (ENCODER_HYSTERESIS_ENABLED) {
-    if (current_level <= 0) { // Von schnell weg
+    if (current_level <= 0) {
       fast_threshold = (unsigned long)(fast_threshold * ENCODER_HYSTERESIS_FACTOR);
     }
-    if (current_level <= 1) { // Von mittel weg  
+    if (current_level <= 1) {
       medium_threshold = (unsigned long)(medium_threshold * ENCODER_HYSTERESIS_FACTOR);
     }
   }
   
-  // Geschwindigkeitslevel bestimmen - NUR 3 STUFEN
   if (time_since_change < fast_threshold) {
-    return 0; // Schnell (30s Schritte)
+    return 0; // Fast (30s steps)
   } else if (time_since_change < medium_threshold) {
-    return 1; // Mittel (10s Schritte)
+    return 1; // Medium (10s steps)
   } else {
-    return 2; // Langsam (1s Schritte)
+    return 2; // Slow (1s steps)
   }
 }
 
 int32_t get_adaptive_encoder_delta() {
-  // Get basic encoder delta
+  // Get basic encoder delta - NOW USING LIBRARY
   int32_t delta = get_encoder_delta();
   
   if (delta != 0) {
     unsigned long current_time = millis();
     unsigned long time_since_last_change = current_time - last_encoder_change_time;
     
-    // Minimale Änderungszeit prüfen (Entstörung)
+    // KEEPING ALL EXISTING ADAPTIVE LOGIC
     if (ENCODER_SMOOTHING_ENABLED && time_since_last_change < ENCODER_MIN_CHANGE_TIME) {
-      return 0; // Zu schnell aufeinander folgende Änderungen ignorieren
+      return 0; // Too fast, ignore
     }
     
     last_encoder_change_time = current_time;
     
-    // Geglättete Zeit verwenden
     unsigned long smoothed_time = get_smoothed_encoder_time(time_since_last_change);
-    
-    // Geschwindigkeitslevel mit Hysterese bestimmen
     int new_speed_level = determine_speed_level(smoothed_time, current_speed_level);
     
-    // Level-Wechsel loggen
     if (new_speed_level != current_speed_level) {
       ENCODER_DEBUG_PRINTF("Speed level change: %d -> %d (time: %lu ms)\n", 
                           current_speed_level, new_speed_level, smoothed_time);
     }
     current_speed_level = new_speed_level;
     
-    // Schritt-Größe basierend auf Level bestimmen - NUR 3 STUFEN
+    // Determine step size based on level
     switch (current_speed_level) {
-      case 0: // Schnell
+      case 0: // Fast
         encoder_speed_step_size = ENCODER_STEP_FAST;  // 30
-        ENCODER_DEBUG_PRINTF("Fast encoder: %d steps (%lu ms)\n", 
-                            encoder_speed_step_size, smoothed_time);
+        DEBUG_PRINTF("Fast encoder: %d steps (%lu ms)\n", 
+                    encoder_speed_step_size, smoothed_time);
         break;
-      case 1: // Mittel
+      case 1: // Medium
         encoder_speed_step_size = ENCODER_STEP_MEDIUM; // 10
         ENCODER_DEBUG_PRINTF("Medium encoder: %d steps (%lu ms)\n", 
-                            encoder_speed_step_size, smoothed_time);
+                    encoder_speed_step_size, smoothed_time);
         break;
-      case 2: // Langsam
+      case 2: // Slow
       default:
         encoder_speed_step_size = ENCODER_STEP_SLOW;   // 1
         ENCODER_DEBUG_PRINTF("Slow encoder: %d steps (%lu ms)\n", 
-                            encoder_speed_step_size, smoothed_time);
+                    encoder_speed_step_size, smoothed_time);
         break;
     }
     
-    // Return delta multiplied by adaptive step size
     return delta * encoder_speed_step_size;
   }
   
@@ -302,14 +265,14 @@ int32_t get_adaptive_encoder_delta() {
 
 bool is_encoder_button_pressed() {
   if (encoder_button_pressed) {
-    encoder_button_pressed = false; // Clear the flag
+    encoder_button_pressed = false;
     return true;
   }
   return false;
 }
 
 // =============================================================================
-// EXISTING DISPLAY IMPLEMENTATION
+// EXISTING DISPLAY IMPLEMENTATION - UNCHANGED
 // =============================================================================
 void lcd_reg_init(void) {
   static const uint8_t init_operations[] = {
@@ -412,8 +375,6 @@ void my_print(const char *buf) {
   Serial.flush();
 }
 #endif
-
-
 
 void my_disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p) {
   uint32_t w = (area->x2 - area->x1 + 1);
