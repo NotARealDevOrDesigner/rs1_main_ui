@@ -28,8 +28,8 @@ battery.h - Battery Management System with MAX17048 Integration
 #define BATTERY_TERMINAL_HEIGHT 6
 #define BATTERY_FILL_MAX_WIDTH  20
 #define BATTERY_FILL_HEIGHT     8
-#define BATTERY_FILL_OFFSET_X   0
-#define BATTERY_FILL_OFFSET_Y   0
+#define BATTERY_FILL_OFFSET_X   2
+#define BATTERY_FILL_OFFSET_Y   2
 
 // =============================================================================
 // BATTERY ICON DATA
@@ -64,6 +64,11 @@ extern unsigned long last_battery_update, last_battery_animation;
 extern bool battery_demo_enabled, battery_animation_increasing;
 extern lv_obj_t *charging_overlay, *off_screen;
 
+// Timer + Widgets für Charging Screen
+static unsigned long charging_overlay_last_active = 0;
+static lv_obj_t *charging_label = nullptr;
+static lv_obj_t *charging_spinner = nullptr;
+
 // =============================================================================
 // FUNCTION DECLARATIONS
 // =============================================================================
@@ -81,6 +86,9 @@ void set_real_battery_level(uint8_t level);
 void toggle_battery_demo(bool enable);
 void print_battery_status();
 void handle_battery_serial_commands(String command);
+void update_charging_screen();
+void backlight_on();
+void backlight_off();
 
 // =============================================================================
 // IMPLEMENTATION
@@ -119,23 +127,42 @@ bool read_power_switch_status_hw() { return (digitalRead(POWER_SWITCH_PIN) == HI
 void create_charging_overlay() {
     charging_overlay = lv_obj_create(lv_scr_act());
     lv_obj_set_size(charging_overlay, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_color(charging_overlay, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_bg_color(charging_overlay, lv_color_hex(COLOR_BTN_PRIMARY), 0);
     lv_obj_set_style_border_width(charging_overlay, 0, 0);
     lv_obj_set_style_pad_all(charging_overlay, 0, 0);
     lv_obj_add_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_SCROLLABLE);
-    
-    lv_obj_t *label = lv_label_create(charging_overlay);
-    lv_label_set_text(label, "Charging...");
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_24, 0);
-    lv_obj_set_style_text_color(label, lv_color_hex(0x000000), 0);
-    lv_obj_center(label);
+
+    // Lade-Prozentsatz
+    charging_label = lv_label_create(charging_overlay);
+    lv_label_set_text(charging_label, "0 %");
+    lv_obj_set_style_text_font(charging_label, &lv_font_montserrat_32, 0);
+    lv_obj_set_style_text_color(charging_label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
+    lv_obj_center(charging_label);
+
+    // Kreis / Spinner
+    charging_spinner = lv_spinner_create(charging_overlay, 2000, 60);
+    lv_obj_set_size(charging_spinner, 120, 120);
+    lv_obj_set_style_arc_width(charging_spinner, 6, 0);
+    lv_obj_set_style_arc_color(charging_spinner, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+    lv_obj_set_style_arc_color(charging_spinner, lv_color_hex(COLOR_TEXT_SECONDARY), LV_PART_INDICATOR);
+    lv_obj_center(charging_spinner);
+
+    // Label in den Vordergrund
+    lv_obj_move_foreground(charging_label);
+
+// Touch-Event → Overlay wieder aktivieren und Timer zurücksetzen
+    lv_obj_add_event_cb(charging_overlay, [](lv_event_t *e) {
+        charging_overlay_last_active = millis();  // Timer zurücksetzen bei Berührung
+        lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
+        backlight_on();
+    }, LV_EVENT_CLICKED, nullptr);
 }
 
 void create_off_screen() {
     off_screen = lv_obj_create(lv_scr_act());
     lv_obj_set_size(off_screen, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_color(off_screen, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_bg_color(off_screen, lv_color_hex(COLOR_BTN_PRIMARY), 0);
     lv_obj_set_style_border_width(off_screen, 0, 0);
     lv_obj_set_style_pad_all(off_screen, 0, 0);
     lv_obj_add_flag(off_screen, LV_OBJ_FLAG_HIDDEN);
@@ -144,15 +171,8 @@ void create_off_screen() {
     lv_obj_t *label = lv_label_create(off_screen);
     lv_label_set_text(label, "Off");
     lv_obj_set_style_text_font(label, &lv_font_montserrat_48, 0);
-    lv_obj_set_style_text_color(label, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(COLOR_TEXT_SECONDARY), 0);
     lv_obj_center(label);
-}
-
-void show_charging_overlay() {
-    if (charging_overlay) {
-        lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_move_foreground(charging_overlay);
-    }
 }
 
 void hide_charging_overlay() {
@@ -196,6 +216,48 @@ bool battery_is_charging() { return battery_state.is_charging; }
 lv_color_t get_battery_color(uint8_t level) {
     return battery_is_charging() ? lv_color_hex(COLOR_BATTERY_LOAD) : lv_color_hex(COLOR_TEXT_PRIMARY);
 }
+
+// backgroundlight functions
+void backlight_on() {
+    digitalWrite(GFX_BL, HIGH);
+}
+
+void backlight_off() {
+    digitalWrite(GFX_BL, LOW);
+}
+
+void show_charging_overlay() {
+    if (charging_overlay) {
+        charging_overlay_last_active = millis();   // Timer zurücksetzen
+        lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(charging_overlay);
+        backlight_on();
+    }
+}
+
+// update_charging_screen Funktion
+void update_charging_screen() {
+    if (!charging_overlay) return;
+
+    // Prozentwert aktualisieren
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d%%", battery_get_level());
+    lv_label_set_text(charging_label, buf);
+
+    unsigned long delta = millis() - charging_overlay_last_active;
+    Serial.println(millis());
+    // Timer prüfen → nach 10s Backlight OFF
+    if (delta > 10000) {
+        lv_obj_add_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
+        Serial.println("BK OFF");
+        backlight_off();
+    } else {
+        lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
+        Serial.println("BK ON");
+        backlight_on();
+    }
+}
+
 
 lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
     lv_obj_t *container = lv_obj_create(parent);
@@ -321,6 +383,7 @@ void battery_system_update() {
             
         case 2: // Charging overlay
             show_charging_overlay(); hide_off_screen();
+            update_charging_screen();
             if (battery_state.max17048_available) {
                 uint8_t real_soc;
                 if (max17048_read_soc(real_soc)) {
