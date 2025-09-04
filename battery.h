@@ -28,8 +28,8 @@ battery.h - Battery Management System with MAX17048 Integration
 #define BATTERY_TERMINAL_HEIGHT 6
 #define BATTERY_FILL_MAX_WIDTH  20
 #define BATTERY_FILL_HEIGHT     8
-#define BATTERY_FILL_OFFSET_X   2
-#define BATTERY_FILL_OFFSET_Y   2
+#define BATTERY_FILL_OFFSET_X   0
+#define BATTERY_FILL_OFFSET_Y   0
 
 // =============================================================================
 // BATTERY ICON DATA
