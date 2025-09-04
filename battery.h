@@ -1,6 +1,6 @@
 /*
 =============================================================================
-battery.h - Complete Battery Management System für ESP32-C6 Camera Control App
+battery.h - Battery Management System with MAX17048 Integration
 =============================================================================
 */
 
@@ -9,675 +9,418 @@ battery.h - Complete Battery Management System für ESP32-C6 Camera Control App
 
 #include "config.h"
 #include <lvgl.h>
+#include <Wire.h>
 
 // =============================================================================
-// BATTERY ICON CONFIGURATION
+// CONFIGURATION
 // =============================================================================
+#define MAX17048_ADDRESS    0x36
+#define MAX17048_SOC        0x04
+#define MAX17048_VERSION    0x08
+#define CHARGE_PIN          3
+#define POWER_SWITCH_PIN    4
 
-// Battery Icon Dimensionen - HIER KANNST DU DIE GRÖSSE ANPASSEN
-#define BATTERY_WIDGET_WIDTH  28    // Gesamtbreite des Battery Widgets
-#define BATTERY_WIDGET_HEIGHT 16    // Gesamthöhe des Battery Widgets
-#define BATTERY_FRAME_WIDTH   24    // Breite des Hauptrahmens
-#define BATTERY_FRAME_HEIGHT  12    // Höhe des Hauptrahmens
-#define BATTERY_TERMINAL_WIDTH 2    // Breite des rechten Terminals
-#define BATTERY_TERMINAL_HEIGHT 6   // Höhe des rechten Terminals
-
-// Battery Fill Dimensionen - HIER KANNST DU DAS FILL-RECHTECK ANPASSEN
-#define BATTERY_FILL_MAX_WIDTH  20  // Maximale Breite des Fills (bei 100%)
-#define BATTERY_FILL_HEIGHT     8   // Höhe des Fills
-#define BATTERY_FILL_OFFSET_X   2   // X-Position des Fills im Rahmen (von links)
-#define BATTERY_FILL_OFFSET_Y   2   // Y-Position des Fills im Rahmen (von oben)
+#define BATTERY_WIDGET_WIDTH  28
+#define BATTERY_WIDGET_HEIGHT 16
+#define BATTERY_FRAME_WIDTH   24
+#define BATTERY_FRAME_HEIGHT  12
+#define BATTERY_TERMINAL_WIDTH 2
+#define BATTERY_TERMINAL_HEIGHT 6
+#define BATTERY_FILL_MAX_WIDTH  20
+#define BATTERY_FILL_HEIGHT     8
+#define BATTERY_FILL_OFFSET_X   0
+#define BATTERY_FILL_OFFSET_Y   0
 
 // =============================================================================
 // BATTERY ICON DATA
 // =============================================================================
-
 static const uint8_t battery_icon_data[] = {
-    // Custom Clean Battery - minimalistisches Design
-    // Schwarzer Rahmen, weißer Hintergrund, schwarzer Fill
-    0xFF, 0xFF, 0xFF, 0xF0,  // Top border
-    0x80, 0x00, 0x00, 0x18,  // Left border + right terminal space
-    0x80, 0x00, 0x00, 0x18,  // 
-    0x80, 0x00, 0x00, 0x18,  // Fill area (wird programmatisch gefüllt)
-    0x80, 0x00, 0x00, 0x18,  // 
-    0x80, 0x00, 0x00, 0x18,  // 
-    0x80, 0x00, 0x00, 0x18,  // 
-    0x80, 0x00, 0x00, 0x18,  // 
-    0x80, 0x00, 0x00, 0x18,  // 
-    0x80, 0x00, 0x00, 0x18,  // 
-    0x80, 0x00, 0x00, 0x18,  // 
-    0x80, 0x00, 0x00, 0x18,  // 
-    0x80, 0x00, 0x00, 0x18,  // 
-    0x80, 0x00, 0x00, 0x18,  // Bottom area
-    0xFF, 0xFF, 0xFF, 0xF0   // Bottom border
+    0xFF, 0xFF, 0xFF, 0xF0, 0x80, 0x00, 0x00, 0x18, 0x80, 0x00, 0x00, 0x18,
+    0x80, 0x00, 0x00, 0x18, 0x80, 0x00, 0x00, 0x18, 0x80, 0x00, 0x00, 0x18,
+    0x80, 0x00, 0x00, 0x18, 0x80, 0x00, 0x00, 0x18, 0x80, 0x00, 0x00, 0x18,
+    0x80, 0x00, 0x00, 0x18, 0x80, 0x00, 0x00, 0x18, 0x80, 0x00, 0x00, 0x18,
+    0x80, 0x00, 0x00, 0x18, 0x80, 0x00, 0x00, 0x18, 0xFF, 0xFF, 0xFF, 0xF0
 };
 
 const lv_img_dsc_t icon_battery = {
     {LV_IMG_CF_ALPHA_1BIT, 0, 0, BATTERY_WIDGET_WIDTH, BATTERY_WIDGET_HEIGHT},
-    sizeof(battery_icon_data),
-    battery_icon_data
+    sizeof(battery_icon_data), battery_icon_data
 };
 
 // =============================================================================
-// BATTERY DATA STRUCTURES
+// DATA STRUCTURES
 // =============================================================================
-
 typedef struct {
-    uint8_t level;        // 0-100 percent
-    bool is_charging;     // Charging status
-    bool show_percentage; // Show percentage text
+    uint8_t level, real_level;
+    bool is_charging, is_power_switch_on, show_percentage, max17048_available;
+    int system_state; // 0=normal, 1=charging_anim, 2=charging_overlay, 3=demo, 4=off
 } battery_info_t;
 
 // =============================================================================
-// GLOBAL BATTERY STATE
+// GLOBAL VARIABLES
 // =============================================================================
-
-// Battery state (wird in battery_init() initialisiert)
 extern battery_info_t battery_state;
-
-// Battery system variables
-extern unsigned long last_battery_update;
-extern unsigned long last_battery_animation;
-extern bool battery_demo_enabled;
-extern bool battery_animation_increasing;
+extern unsigned long last_battery_update, last_battery_animation;
+extern bool battery_demo_enabled, battery_animation_increasing;
+extern lv_obj_t *charging_overlay, *off_screen;
 
 // =============================================================================
-// CORE BATTERY FUNCTIONS
+// FUNCTION DECLARATIONS
 // =============================================================================
-
-// Initialization
 void battery_init();
-
-// State management
+void battery_system_update();
 void battery_set_level(uint8_t level);
 void battery_set_charging(bool charging);
 uint8_t battery_get_level();
 bool battery_is_charging();
-
-// System updates
-void battery_system_update();
+lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y);
+void update_battery_widget(lv_obj_t *battery_widget);
+void update_all_battery_widgets();
+lv_color_t get_battery_color(uint8_t level);
 void set_real_battery_level(uint8_t level);
 void toggle_battery_demo(bool enable);
 void print_battery_status();
-
-// =============================================================================
-// UI FUNCTIONS
-// =============================================================================
-
-// Widget creation and updates
-lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y);
-void update_battery_widget(lv_obj_t *battery_widget);
-void update_all_battery_widgets(); // Diese Funktion muss in ui.h implementiert werden
-
-// Visual helpers
-lv_color_t get_battery_color(uint8_t level);
-
-// Advanced positioning functions
-void battery_set_fill_position(lv_obj_t *battery_widget, lv_coord_t x, lv_coord_t y);
-void battery_set_fill_height(lv_obj_t *battery_widget, lv_coord_t height);
-void battery_set_fill_max_width(lv_obj_t *battery_widget, lv_coord_t max_width);
-
-// =============================================================================
-// HARDWARE INTEGRATION
-// =============================================================================
-
-// Hardware reading functions (to be implemented)
-uint8_t read_battery_voltage();
-bool read_charging_status();
-void update_battery_from_hardware();
-
-// =============================================================================
-// TESTING AND DEBUG FUNCTIONS
-// =============================================================================
-
-// Demo and testing
-void battery_test_animation();
-void battery_debug_positions();
-
-// Serial command handling
 void handle_battery_serial_commands(String command);
 
 // =============================================================================
 // IMPLEMENTATION
 // =============================================================================
+battery_info_t battery_state = {85, 85, false, true, false, false, 3};
+unsigned long last_battery_update = 0, last_battery_animation = 0;
+bool battery_demo_enabled = true, battery_animation_increasing = true;
+lv_obj_t *charging_overlay = nullptr, *off_screen = nullptr;
 
-// Battery state (wird in battery_init() initialisiert)
-battery_info_t battery_state = {85, false, false}; // Default: 85%, not charging
+// MAX17048 Functions
+uint16_t max17048_read_register(uint8_t reg) {
+    Wire.beginTransmission(MAX17048_ADDRESS);
+    Wire.write(reg);
+    if (Wire.endTransmission() != 0 || Wire.requestFrom(MAX17048_ADDRESS, 2) != 2) return 0xFFFF;
+    return (Wire.read() << 8) | Wire.read();
+}
 
-// Battery system variables
-unsigned long last_battery_update = 0;
-unsigned long last_battery_animation = 0;
-bool battery_demo_enabled = true; // Für Testing - später deaktivieren
-bool battery_animation_increasing = true;
+bool max17048_init() {
+    uint16_t version = max17048_read_register(MAX17048_VERSION);
+    return (version != 0xFFFF && version != 0x0000);
+}
 
-// =============================================================================
-// CORE FUNCTIONS IMPLEMENTATION
-// =============================================================================
+bool max17048_read_soc(uint8_t &soc) {
+    uint16_t raw_soc = max17048_read_register(MAX17048_SOC);
+    if (raw_soc == 0xFFFF) return false;
+    soc = (raw_soc >> 8) & 0xFF;
+    if (soc > 100) soc = 100;
+    return true;
+}
 
+// GPIO Functions
+bool read_charging_status_hw() { return (digitalRead(CHARGE_PIN) == LOW); }
+bool read_power_switch_status_hw() { return (digitalRead(POWER_SWITCH_PIN) == HIGH); }
+
+// Overlay Functions
+void create_charging_overlay() {
+    charging_overlay = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(charging_overlay, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_bg_color(charging_overlay, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_border_width(charging_overlay, 0, 0);
+    lv_obj_set_style_pad_all(charging_overlay, 0, 0);
+    lv_obj_add_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_SCROLLABLE);
+    
+    lv_obj_t *label = lv_label_create(charging_overlay);
+    lv_label_set_text(label, "Charging...");
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(0x000000), 0);
+    lv_obj_center(label);
+}
+
+void create_off_screen() {
+    off_screen = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(off_screen, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_bg_color(off_screen, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_border_width(off_screen, 0, 0);
+    lv_obj_set_style_pad_all(off_screen, 0, 0);
+    lv_obj_add_flag(off_screen, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(off_screen, LV_OBJ_FLAG_SCROLLABLE);
+    
+    lv_obj_t *label = lv_label_create(off_screen);
+    lv_label_set_text(label, "Off");
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(0x000000), 0);
+    lv_obj_center(label);
+}
+
+void show_charging_overlay() {
+    if (charging_overlay) {
+        lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(charging_overlay);
+    }
+}
+
+void hide_charging_overlay() {
+    if (charging_overlay) lv_obj_add_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
+}
+
+void show_off_screen() {
+    if (off_screen) {
+        lv_obj_clear_flag(off_screen, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_move_foreground(off_screen);
+    }
+}
+
+void hide_off_screen() {
+    if (off_screen) lv_obj_add_flag(off_screen, LV_OBJ_FLAG_HIDDEN);
+}
+
+// Core Functions
 void battery_init() {
-    battery_state.level = 85;
-    battery_state.is_charging = false;
-    battery_state.show_percentage = false;
-    DEBUG_PRINTF("Battery system initialized - Level: %d%%\n", battery_get_level());
+    battery_state = {85, 85, false, true, false, false, 3};
+    pinMode(CHARGE_PIN, INPUT_PULLUP);
+    pinMode(POWER_SWITCH_PIN, INPUT_PULLUP);
+    
+    if (max17048_init()) {
+        battery_state.max17048_available = true;
+        battery_state.system_state = 0;
+    }
+    
+    create_charging_overlay();
+    create_off_screen();
 }
 
 void battery_set_level(uint8_t level) {
-    if (level > 100) level = 100;
-    battery_state.level = level;
+    battery_state.level = (level > 100) ? 100 : level;
 }
 
-void battery_set_charging(bool charging) {
-    battery_state.is_charging = charging;
-}
+void battery_set_charging(bool charging) { battery_state.is_charging = charging; }
+uint8_t battery_get_level() { return battery_state.level; }
+bool battery_is_charging() { return battery_state.is_charging; }
 
-uint8_t battery_get_level() {
-    return battery_state.level;
-}
-
-bool battery_is_charging() {
-    return battery_state.is_charging;
-}
-
-// =============================================================================
-// VISUAL FUNCTIONS IMPLEMENTATION
-// =============================================================================
-
-// Farbe basierend auf Battery Level - Custom Clean Style
 lv_color_t get_battery_color(uint8_t level) {
-    // Immer schwarz für normalen Betrieb
-    // Spezialfall: Grün wenn geladen wird (zukünftiges Feature)
-    if (battery_is_charging()) {
-        return lv_color_hex(COLOR_BATTERY_LOAD); // Grün für Charging (zukünftiges Feature)
-    }
-    
-    // Standard: Immer schwarz - dein cleaner Look
-    return lv_color_hex(COLOR_TEXT_PRIMARY); // Schwarz (#000000)
+    return battery_is_charging() ? lv_color_hex(COLOR_BATTERY_LOAD) : lv_color_hex(COLOR_TEXT_PRIMARY);
 }
-
-// Replace your create_battery_widget function with this simplified debug version:
 
 lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
-    DEBUG_PRINTLN("Creating battery widget...");
+    lv_obj_t *container = lv_obj_create(parent);
+    lv_obj_set_size(container, BATTERY_WIDGET_WIDTH, BATTERY_WIDGET_HEIGHT);
+    lv_obj_set_pos(container, x, y);
+    lv_obj_set_style_bg_opa(container, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(container, 0, 0);
+    lv_obj_set_style_pad_all(container, 0, 0);
+    lv_obj_set_scrollbar_mode(container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *frame = lv_obj_create(container);
+    lv_obj_set_size(frame, BATTERY_FRAME_WIDTH, BATTERY_FRAME_HEIGHT);
+    lv_obj_set_pos(frame, 0, 2);
+    lv_obj_set_style_bg_color(frame, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_bg_opa(frame, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(frame, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+    lv_obj_set_style_border_width(frame, 2, 0);
+    lv_obj_set_style_radius(frame, 2, 0);
+    lv_obj_set_style_pad_all(frame, 0, 0);
+    lv_obj_set_scrollbar_mode(frame, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(frame, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *terminal = lv_obj_create(container);
+    lv_obj_set_size(terminal, BATTERY_TERMINAL_WIDTH, BATTERY_TERMINAL_HEIGHT);
+    lv_obj_set_pos(terminal, BATTERY_FRAME_WIDTH, (BATTERY_WIDGET_HEIGHT - BATTERY_TERMINAL_HEIGHT) / 2);
+    lv_obj_set_style_bg_color(terminal, lv_color_hex(COLOR_TEXT_PRIMARY), 0);
+    lv_obj_set_style_bg_opa(terminal, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(terminal, 0, 0);
+    lv_obj_set_style_radius(terminal, 0, 0);
+    lv_obj_set_scrollbar_mode(terminal, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(terminal, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *fill = lv_obj_create(frame);
+    lv_obj_set_pos(fill, BATTERY_FILL_OFFSET_X, BATTERY_FILL_OFFSET_Y);
+    lv_obj_set_size(fill, BATTERY_FILL_MAX_WIDTH, BATTERY_FILL_HEIGHT);
+    lv_obj_set_style_bg_color(fill, get_battery_color(battery_get_level()), 0);
+    lv_obj_set_style_bg_opa(fill, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(fill, 0, 0);
+    lv_obj_set_style_radius(fill, 0, 0);
+    lv_obj_set_style_pad_all(fill, 0, 0);
+    lv_obj_set_scrollbar_mode(fill, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(fill, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_move_foreground(fill);
+    lv_obj_clear_flag(fill, LV_OBJ_FLAG_HIDDEN);
     
-    // Container für Battery - Custom Clean Größe
-    lv_obj_t *battery_container = lv_obj_create(parent);
-    lv_obj_set_size(battery_container, BATTERY_WIDGET_WIDTH, BATTERY_WIDGET_HEIGHT);
-    lv_obj_set_pos(battery_container, x, y);
-    lv_obj_set_style_bg_opa(battery_container, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(battery_container, 0, 0);
-    lv_obj_set_style_pad_all(battery_container, 0, 0);
-    
-    // Remove scrollbars from container
-    lv_obj_set_scrollbar_mode(battery_container, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(battery_container, LV_OBJ_FLAG_SCROLLABLE);
-
-    DEBUG_PRINTLN("Container created");
-
-    // Battery Rahmen (äußere Hülle) - Custom Clean Style
-    lv_obj_t *battery_frame = lv_obj_create(battery_container);
-    lv_obj_set_size(battery_frame, BATTERY_FRAME_WIDTH, BATTERY_FRAME_HEIGHT);
-    lv_obj_set_pos(battery_frame, 0, 2); // Vertikal zentriert
-    lv_obj_set_style_bg_color(battery_frame, lv_color_hex(0xFFFFFF), 0);    // Weißer Hintergrund
-    lv_obj_set_style_bg_opa(battery_frame, LV_OPA_COVER, 0);                // Volldeckend
-    lv_obj_set_style_border_color(battery_frame, lv_color_hex(COLOR_TEXT_PRIMARY), 0); // Schwarzer Rahmen - FORCE BLACK
-    lv_obj_set_style_border_width(battery_frame, 2, 0);                     // 2px Rahmen
-    lv_obj_set_style_radius(battery_frame, 2, 0);                           // Leicht abgerundet
-    lv_obj_set_style_pad_all(battery_frame, 0, 0);  // No padding
-    
-    // Remove scrollbars from frame
-    lv_obj_set_scrollbar_mode(battery_frame, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(battery_frame, LV_OBJ_FLAG_SCROLLABLE);
-
-    DEBUG_PRINTLN("Frame created");
-
-    // Battery Terminal (rechts) - Custom Clean Style
-    lv_obj_t *battery_terminal = lv_obj_create(battery_container);
-    lv_obj_set_size(battery_terminal, BATTERY_TERMINAL_WIDTH, BATTERY_TERMINAL_HEIGHT);
-    lv_obj_set_pos(battery_terminal, BATTERY_FRAME_WIDTH, (BATTERY_WIDGET_HEIGHT - BATTERY_TERMINAL_HEIGHT) / 2);
-    lv_obj_set_style_bg_color(battery_terminal, lv_color_hex(COLOR_TEXT_PRIMARY), 0); // FORCE BLACK
-    lv_obj_set_style_bg_opa(battery_terminal, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(battery_terminal, 0, 0);
-    lv_obj_set_style_radius(battery_terminal, 0, 0);
-    
-    // Remove scrollbars from terminal
-    lv_obj_set_scrollbar_mode(battery_terminal, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(battery_terminal, LV_OBJ_FLAG_SCROLLABLE);
-
-    DEBUG_PRINTLN("Terminal created");
-
-    // ========================================================================
-    // BATTERY FILL - FORCED BRIGHT RED FOR VISIBILITY
-    // ========================================================================
-    lv_obj_t *battery_fill = lv_obj_create(battery_frame);
-    
-    // FORCE EXACT POSITION AND SIZE - NO CONSTANTS
-    lv_obj_set_pos(battery_fill, 0, 0);  // Fixed position
-    lv_obj_set_size(battery_fill, 15, 8);  // Fixed size for 75% of 20px width
-    
-    DEBUG_PRINTF("Fill created at position (2,2) with size 15x8\n");
-    
-    // FORCE BRIGHT RED COLOR FOR MAXIMUM VISIBILITY
-    lv_obj_set_style_bg_color(battery_fill, lv_color_hex(COLOR_TEXT_PRIMARY), 0);  // BRIGHT RED
-    lv_obj_set_style_bg_opa(battery_fill, LV_OPA_COVER, 0);              // FULL OPACITY
-    lv_obj_set_style_border_width(battery_fill, 0, 0);                   // NO BORDER
-    lv_obj_set_style_radius(battery_fill, 0, 0);                         // NO RADIUS
-    lv_obj_set_style_pad_all(battery_fill, 0, 0);                        // NO PADDING
-    
-    // Remove scrollbars from fill
-    lv_obj_set_scrollbar_mode(battery_fill, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(battery_fill, LV_OBJ_FLAG_SCROLLABLE);
-
-    DEBUG_PRINTLN("Fill styled with BRIGHT RED");
-
-    // FORCE THE FILL TO BE VISIBLE AND ON TOP
-    lv_obj_move_foreground(battery_fill);
-    lv_obj_clear_flag(battery_fill, LV_OBJ_FLAG_HIDDEN);
-    
-    DEBUG_PRINTLN("Fill moved to foreground and made visible");
-
-    // User data speichern für Updates
-    lv_obj_set_user_data(battery_container, battery_fill);
-
-    DEBUG_PRINTLN("Battery widget creation complete");
-
-    return battery_container;
+    lv_obj_set_user_data(container, fill);
+    update_battery_widget(container);
+    return container;
 }
 
-/*
-// Custom Clean Battery Widget erstellen (für Header) - FIXED VERSION
-lv_obj_t* create_battery_widget(lv_obj_t *parent, lv_coord_t x, lv_coord_t y) {
-    // Container für Battery - Custom Clean Größe
-    lv_obj_t *battery_container = lv_obj_create(parent);
-    lv_obj_set_size(battery_container, BATTERY_WIDGET_WIDTH, BATTERY_WIDGET_HEIGHT);
-    lv_obj_set_pos(battery_container, x, y);
-    lv_obj_set_style_bg_opa(battery_container, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(battery_container, 0, 0);
-    lv_obj_set_style_pad_all(battery_container, 0, 0);
-    
-    // FIX: Remove scrollbars from container
-    lv_obj_set_scrollbar_mode(battery_container, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(battery_container, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Battery Rahmen (äußere Hülle) - Custom Clean Style
-    lv_obj_t *battery_frame = lv_obj_create(battery_container);
-    lv_obj_set_size(battery_frame, BATTERY_FRAME_WIDTH, BATTERY_FRAME_HEIGHT);
-    lv_obj_set_pos(battery_frame, 0, 2); // Vertikal zentriert
-    lv_obj_set_style_bg_color(battery_frame, lv_color_hex(0xFFFFFF), 0);    // Weißer Hintergrund
-    lv_obj_set_style_bg_opa(battery_frame, LV_OPA_COVER, 0);                // Volldeckend
-    lv_obj_set_style_border_color(battery_frame, lv_color_hex(COLOR_TEXT_PRIMARY), 0); // Schwarzer Rahmen
-    lv_obj_set_style_border_width(battery_frame, 2, 0);                     // 2px Rahmen
-    lv_obj_set_style_radius(battery_frame, 2, 0);                           // Leicht abgerundet
-    
-    // FIX: Remove scrollbars from frame
-    lv_obj_set_scrollbar_mode(battery_frame, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(battery_frame, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Battery Terminal (rechts) - Custom Clean Style
-    lv_obj_t *battery_terminal = lv_obj_create(battery_container);
-    lv_obj_set_size(battery_terminal, BATTERY_TERMINAL_WIDTH, BATTERY_TERMINAL_HEIGHT);
-    lv_obj_set_pos(battery_terminal, BATTERY_FRAME_WIDTH, (BATTERY_WIDGET_HEIGHT - BATTERY_TERMINAL_HEIGHT) / 2); // Zentriert
-    lv_obj_set_style_bg_color(battery_terminal, lv_color_hex(COLOR_TEXT_PRIMARY), 0); // Schwarzer Terminal
-    lv_obj_set_style_border_width(battery_terminal, 0, 0);
-    lv_obj_set_style_radius(battery_terminal, 0, 0);                        // Eckig, wie dein Design
-    
-    // FIX: Remove scrollbars from terminal
-    lv_obj_set_scrollbar_mode(battery_terminal, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(battery_terminal, LV_OBJ_FLAG_SCROLLABLE);
-
-    // ========================================================================
-    // BATTERY FILL - HIER KANNST DU DIE POSITION ANPASSEN
-    // ========================================================================
-    lv_obj_t *battery_fill = lv_obj_create(battery_frame);
-    
-    // POSITION DES FILLS - HIER ANPASSEN:
-    lv_obj_set_pos(battery_fill, BATTERY_FILL_OFFSET_X, BATTERY_FILL_OFFSET_Y);
-    
-    // GRÖSSE DES FILLS - HIER ANPASSEN:
-    lv_obj_set_size(battery_fill, BATTERY_FILL_MAX_WIDTH, BATTERY_FILL_HEIGHT);
-    
-    // STYLE DES FILLS:
-    lv_obj_set_style_bg_color(battery_fill, get_battery_color(battery_get_level()), 0);
-    lv_obj_set_style_bg_opa(battery_fill, LV_OPA_COVER, 0);  // FIX: Ensure fill is visible
-    lv_obj_set_style_border_width(battery_fill, 0, 0);
-    lv_obj_set_style_radius(battery_fill, 0, 0);                            // Eckig, clean look
-    lv_obj_set_style_pad_all(battery_fill, 0, 0);  // FIX: Remove any padding
-    
-    // FIX: Remove scrollbars from fill
-    lv_obj_set_scrollbar_mode(battery_fill, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_clear_flag(battery_fill, LV_OBJ_FLAG_SCROLLABLE);
-
-    // User data speichern für Updates
-    lv_obj_set_user_data(battery_container, battery_fill);
-
-    // Initial update
-    update_battery_widget(battery_container);
-
-    return battery_container;
-}
-*/
-// Replace your update_battery_widget function with this debug version temporarily:
-
-void update_battery_widget(lv_obj_t *battery_widget) {
-    if (!battery_widget) {
-        DEBUG_PRINTLN("ERROR: battery_widget is NULL");
-        return;
-    }
-    
-    lv_obj_t *battery_fill = (lv_obj_t*)lv_obj_get_user_data(battery_widget);
-    if (!battery_fill) {
-        DEBUG_PRINTLN("ERROR: battery_fill is NULL - user_data not set correctly");
-        return;
-    }
-
-    uint8_t level = battery_get_level();
-    
-    // ========================================================================
-    // DEBUG OUTPUT
-    // ========================================================================
-    DEBUG_PRINTF("=== Battery Widget Update Debug ===\n");
-    DEBUG_PRINTF("Battery Level: %d%%\n", level);
-    DEBUG_PRINTF("Max Fill Width: %d pixels\n", BATTERY_FILL_MAX_WIDTH);
-    
-    // Fill width berechnen (0 bis BATTERY_FILL_MAX_WIDTH pixels)
-    lv_coord_t fill_width = (level * BATTERY_FILL_MAX_WIDTH) / 100;
-    DEBUG_PRINTF("Calculated Fill Width: %d pixels\n", fill_width);
-    
-    // Mindestens 1 pixel wenn level > 0
-    if (fill_width < 1 && level > 0) {
-        fill_width = 1;
-        DEBUG_PRINTLN("Fill width adjusted to minimum 1 pixel");
-    }
-    
-    // FILL BREITE SETZEN:
-    lv_obj_set_width(battery_fill, fill_width);
-    DEBUG_PRINTF("Fill width set to: %d pixels\n", fill_width);
-    
-    // Get current position and size for debugging
-    lv_coord_t fill_x = lv_obj_get_x(battery_fill);
-    lv_coord_t fill_y = lv_obj_get_y(battery_fill);
-    lv_coord_t fill_height = lv_obj_get_height(battery_fill);
-    lv_coord_t current_width = lv_obj_get_width(battery_fill);
-    
-    DEBUG_PRINTF("Fill Position: x=%d, y=%d\n", fill_x, fill_y);
-    DEBUG_PRINTF("Fill Size: %dx%d\n", current_width, fill_height);
-    
-    // FILL FARBE AKTUALISIEREN:
-    lv_color_t fill_color = get_battery_color(level);
-    lv_obj_set_style_bg_color(battery_fill, fill_color, 0);
-    DEBUG_PRINTF("Fill Color: 0x%06X\n", fill_color.full);
-    
-    // Check if fill is hidden or transparent
-    lv_opa_t fill_opa = lv_obj_get_style_bg_opa(battery_fill, 0);
-    DEBUG_PRINTF("Fill Opacity: %d (255=opaque, 0=transparent)\n", fill_opa);
-    
-    // Force visibility (temporary test)
-    lv_obj_set_style_bg_opa(battery_fill, LV_OPA_COVER, 0);
-    DEBUG_PRINTLN("Fill opacity forced to LV_OPA_COVER");
-    
-    DEBUG_PRINTLN("===================================\n");
-}
-/*
-// Battery Widget updaten - Custom Clean Style
 void update_battery_widget(lv_obj_t *battery_widget) {
     if (!battery_widget) return;
-    
-    lv_obj_t *battery_fill = (lv_obj_t*)lv_obj_get_user_data(battery_widget);
-    if (!battery_fill) return;
+    lv_obj_t *fill = (lv_obj_t*)lv_obj_get_user_data(battery_widget);
+    if (!fill) return;
 
     uint8_t level = battery_get_level();
-    
-    // ========================================================================
-    // FILL WIDTH BERECHNUNG - HIER KANNST DU DIE SKALIERUNG ANPASSEN
-    // ========================================================================
-    
-    // Fill width berechnen (0 bis BATTERY_FILL_MAX_WIDTH pixels)
     lv_coord_t fill_width = (level * BATTERY_FILL_MAX_WIDTH) / 100;
-    
-    // Mindestens 1 pixel wenn level > 0 (optinal, kannst du entfernen)
     if (fill_width < 1 && level > 0) fill_width = 1;
     
-    // FILL BREITE SETZEN:
-    lv_obj_set_width(battery_fill, fill_width);
-    
-    // FILL FARBE AKTUALISIEREN:
-    lv_obj_set_style_bg_color(battery_fill, get_battery_color(level), 0);
-    
-    // ========================================================================
-    // SPEZIELLE EFFEKTE - HIER KANNST DU ANIMATIONEN HINZUFÜGEN
-    // ========================================================================
-    
-    // Charging Animation (zukünftiges Feature)
-    if (battery_is_charging()) {
-        // Hier könntest du eine Pulse-Animation implementieren
-        // Beispiel: lv_obj_set_style_bg_opa mit Animation
-        // Aktuell: Nur Farbwechsel zu Grün
-    }
-    
-    // Critical Level Indication (optional)
-    if (level < 15) {
-        // Hier könntest du ein Blink-Effekt implementieren
-        // Aktuell keine spezielle Anzeige da Fill immer schwarz ist
-    }
+    lv_obj_set_width(fill, fill_width);
+    lv_obj_set_style_bg_color(fill, get_battery_color(level), 0);
 }
-*/
-// =============================================================================
-// SYSTEM UPDATE FUNCTIONS
-// =============================================================================
 
 void battery_system_update() {
     unsigned long current_time = millis();
+    if (current_time - last_battery_update <= 500) return;
     
-    // Demo Animation für Testing (alle 2 Sekunden)
-    if (battery_demo_enabled && (current_time - last_battery_animation > 2000)) {
-        last_battery_animation = current_time;
-        
-        uint8_t current_level = battery_get_level();
-        uint8_t new_level;
-        
-        if (battery_animation_increasing) {
-            new_level = current_level + 5;
-            if (new_level >= 100) {
-                new_level = 100;
-                battery_animation_increasing = false;
-            }
-        } else {
-            new_level = current_level - 5;
-            if (new_level <= 10) {
-                new_level = 10;
-                battery_animation_increasing = true;
-            }
-        }
-        
-        battery_set_level(new_level);
-        DEBUG_PRINTF("Battery Demo: Level set to %d%%\n", new_level);
+    last_battery_update = current_time;
+    
+    bool charging = read_charging_status_hw();
+    bool power_switch_on = read_power_switch_status_hw();
+    battery_state.is_charging = charging;
+    battery_state.is_power_switch_on = power_switch_on;
+    
+    // Determine system state
+    if (!charging && !power_switch_on) {
+        battery_state.system_state = 4; // Off screen
+    } else if (charging && !power_switch_on) {
+        battery_state.system_state = 2; // Charging overlay
+    } else if (!charging && power_switch_on) {
+        battery_state.system_state = battery_state.max17048_available ? 0 : 3;
+    } else if (charging && power_switch_on) {
+        battery_state.system_state = 1; // Charging animation
     }
     
-    // Battery Widget Updates (alle 500ms für smooth animation)
-    if (current_time - last_battery_update > 500) {
-        last_battery_update = current_time;
-        update_all_battery_widgets();
+    // Handle states
+    switch (battery_state.system_state) {
+        case 0: // Normal operation
+            hide_charging_overlay(); hide_off_screen();
+            if (battery_state.max17048_available) {
+                uint8_t real_soc;
+                if (max17048_read_soc(real_soc)) {
+                    battery_state.real_level = real_soc;
+                    battery_set_level(real_soc);
+                } else {
+                    battery_state.system_state = 3;
+                    battery_state.max17048_available = false;
+                }
+            }
+            break;
+            
+        case 1: // Charging animation
+            hide_charging_overlay(); hide_off_screen();
+            if (current_time - last_battery_animation > 800) {
+                last_battery_animation = current_time;
+                uint8_t real_soc = battery_state.real_level;
+                if (battery_state.max17048_available) {
+                    if (max17048_read_soc(real_soc)) battery_state.real_level = real_soc;
+                }
+                
+                uint8_t current_display = battery_state.level;
+                uint8_t new_level = battery_animation_increasing ? current_display + 3 : current_display - 3;
+                
+                if (battery_animation_increasing && new_level >= 100) {
+                    new_level = 100; battery_animation_increasing = false;
+                } else if (!battery_animation_increasing && new_level <= real_soc) {
+                    new_level = real_soc; battery_animation_increasing = true;
+                }
+                battery_set_level(new_level);
+            }
+            break;
+            
+        case 2: // Charging overlay
+            show_charging_overlay(); hide_off_screen();
+            if (battery_state.max17048_available) {
+                uint8_t real_soc;
+                if (max17048_read_soc(real_soc)) {
+                    battery_state.real_level = real_soc;
+                    battery_set_level(real_soc);
+                }
+            }
+            break;
+            
+        case 3: // Demo mode
+            hide_charging_overlay(); hide_off_screen();
+            if (battery_demo_enabled && (current_time - last_battery_animation > 2000)) {
+                last_battery_animation = current_time;
+                uint8_t current_level = battery_get_level();
+                uint8_t new_level = battery_animation_increasing ? current_level + 5 : current_level - 5;
+                
+                if (battery_animation_increasing && new_level >= 100) {
+                    new_level = 100; battery_animation_increasing = false;
+                } else if (!battery_animation_increasing && new_level <= 10) {
+                    new_level = 10; battery_animation_increasing = true;
+                }
+                battery_set_level(new_level);
+            }
+            break;
+            
+        case 4: // Off screen
+        default:
+            hide_charging_overlay(); show_off_screen();
+            if (battery_state.max17048_available) {
+                uint8_t real_soc;
+                if (max17048_read_soc(real_soc)) {
+                    battery_state.real_level = real_soc;
+                    battery_set_level(real_soc);
+                }
+            }
+            break;
     }
+    
+    update_all_battery_widgets();
 }
 
-// Funktion zum Setzen des echten Battery Levels (später von Hardware)
 void set_real_battery_level(uint8_t level) {
-    battery_demo_enabled = false; // Demo deaktivieren
+    battery_demo_enabled = false;
+    battery_state.system_state = 3;
     battery_set_level(level);
     update_all_battery_widgets();
-    DEBUG_PRINTF("Real battery level set: %d%%\n", level);
 }
 
-// Funktion zum Aktivieren/Deaktivieren der Demo
 void toggle_battery_demo(bool enable) {
     battery_demo_enabled = enable;
     if (enable) {
-        DEBUG_PRINTLN("Battery demo animation enabled");
-    } else {
-        DEBUG_PRINTLN("Battery demo animation disabled");
+        battery_state.system_state = 3;
+    } else if (battery_state.max17048_available) {
+        battery_state.system_state = 0;
     }
 }
 
-// Battery Status für Debugging ausgeben
 void print_battery_status() {
-    DEBUG_PRINTLN("=== Battery Status ===");
-    DEBUG_PRINTF("Level: %d%%\n", battery_get_level());
-    DEBUG_PRINTF("Charging: %s\n", battery_is_charging() ? "Yes" : "No");
-    DEBUG_PRINTF("Demo Mode: %s\n", battery_demo_enabled ? "Enabled" : "Disabled");
-    DEBUG_PRINTF("Color: 0x%06X\n", get_battery_color(battery_get_level()).full);
-    DEBUG_PRINTLN("======================");
+    const char* state_names[] = {"Normal", "Charging Animation", "Charging Overlay", "Demo", "Off Screen"};
+    Serial.println("=== Battery Status ===");
+    Serial.printf("Display Level: %d%%, Real Level: %d%%\n", battery_get_level(), battery_state.real_level);
+    Serial.printf("Charging: %s, Switch: %s\n", battery_is_charging() ? "Yes" : "No", 
+                  battery_state.is_power_switch_on ? "On" : "Off");
+    Serial.printf("MAX17048: %s\n", battery_state.max17048_available ? "Available" : "Not available");
+    Serial.printf("System State: %s\n", state_names[battery_state.system_state]);
+    Serial.printf("GPIO %d: %s, GPIO %d: %s\n", CHARGE_PIN, 
+                  read_charging_status_hw() ? "CHARGING" : "NOT CHARGING",
+                  POWER_SWITCH_PIN, read_power_switch_status_hw() ? "ON" : "OFF");
+    Serial.println("======================");
 }
-
-// =============================================================================
-// HARDWARE INTEGRATION IMPLEMENTATION
-// =============================================================================
-
-uint8_t read_battery_voltage() {
-    // TODO: Echte ADC-Lesung implementieren
-    // Beispiel: ADC lesen und in Prozent umrechnen
-    // return map(analogRead(BATTERY_PIN), 0, 4095, 0, 100);
-    return 85; // Placeholder
-}
-
-bool read_charging_status() {
-    // TODO: Charging Pin lesen
-    // return digitalRead(CHARGING_PIN);
-    return false; // Placeholder
-}
-
-void update_battery_from_hardware() {
-    // Diese Funktion kann periodisch aufgerufen werden, um echte Werte zu lesen
-    uint8_t hw_level = read_battery_voltage();
-    bool hw_charging = read_charging_status();
-    
-    battery_set_level(hw_level);
-    battery_set_charging(hw_charging);
-    
-    DEBUG_PRINTF("Hardware battery update: %d%% (Charging: %s)\n", 
-                 hw_level, hw_charging ? "Yes" : "No");
-}
-
-// =============================================================================
-// POSITION HELPER FUNCTIONS IMPLEMENTATION
-// =============================================================================
-
-// Fill Position zur Laufzeit ändern (falls gewünscht)
-void battery_set_fill_position(lv_obj_t *battery_widget, lv_coord_t x, lv_coord_t y) {
-    if (!battery_widget) return;
-    
-    lv_obj_t *battery_fill = (lv_obj_t*)lv_obj_get_user_data(battery_widget);
-    if (!battery_fill) return;
-    
-    lv_obj_set_pos(battery_fill, x, y);
-}
-
-// Fill Höhe zur Laufzeit ändern (falls gewünscht)
-void battery_set_fill_height(lv_obj_t *battery_widget, lv_coord_t height) {
-    if (!battery_widget) return;
-    
-    lv_obj_t *battery_fill = (lv_obj_t*)lv_obj_get_user_data(battery_widget);
-    if (!battery_fill) return;
-    
-    lv_obj_set_height(battery_fill, height);
-}
-
-// Fill Max-Width zur Laufzeit ändern (falls gewünscht)
-void battery_set_fill_max_width(lv_obj_t *battery_widget, lv_coord_t max_width) {
-    if (!battery_widget) return;
-    
-    lv_obj_t *battery_fill = (lv_obj_t*)lv_obj_get_user_data(battery_widget);
-    if (!battery_fill) return;
-    
-    // Aktuelle Level beibehalten, aber neue Max-Width verwenden
-    uint8_t level = battery_get_level();
-    lv_coord_t new_width = (level * max_width) / 100;
-    lv_obj_set_width(battery_fill, new_width);
-}
-
-// =============================================================================
-// TESTING AND DEBUG IMPLEMENTATION
-// =============================================================================
-
-// Test-Funktion für Battery Animation - Custom Clean Style
-void battery_test_animation() {
-    static uint8_t test_level = 0;
-    static bool increasing = true;
-    
-    if (increasing) {
-        test_level += 5;
-        if (test_level >= 100) {
-            increasing = false;
-        }
-    } else {
-        test_level -= 5;
-        if (test_level <= 0) {
-            increasing = true;
-        }
-    }
-    
-    battery_set_level(test_level);
-}
-
-// Debug-Funktionen für Position-Testing
-void battery_debug_positions() {
-    DEBUG_PRINTLN("=== Battery Fill Position Debug ===");
-    DEBUG_PRINTF("Widget Size: %dx%d\n", BATTERY_WIDGET_WIDTH, BATTERY_WIDGET_HEIGHT);
-    DEBUG_PRINTF("Frame Size: %dx%d\n", BATTERY_FRAME_WIDTH, BATTERY_FRAME_HEIGHT);
-    DEBUG_PRINTF("Terminal Size: %dx%d\n", BATTERY_TERMINAL_WIDTH, BATTERY_TERMINAL_HEIGHT);
-    DEBUG_PRINTF("Fill Position: %d,%d\n", BATTERY_FILL_OFFSET_X, BATTERY_FILL_OFFSET_Y);
-    DEBUG_PRINTF("Fill Size: %dx%d (max)\n", BATTERY_FILL_MAX_WIDTH, BATTERY_FILL_HEIGHT);
-    DEBUG_PRINTLN("===================================");
-}
-
-// =============================================================================
-// SERIAL COMMAND HANDLING
-// =============================================================================
 
 void handle_battery_serial_commands(String command) {
     if (command.startsWith("bat ")) {
-        // Battery Level setzen: "bat 75"
         int level = command.substring(4).toInt();
         if (level >= 0 && level <= 100) {
             set_real_battery_level(level);
             Serial.printf("Battery level set to %d%%\n", level);
-        } else {
-            Serial.println("Invalid battery level (0-100)");
         }
     }
-    else if (command == "bat demo on") {
-        toggle_battery_demo(true);
-        Serial.println("Battery demo enabled");
+    else if (command == "bat demo on") { toggle_battery_demo(true); Serial.println("Demo enabled"); }
+    else if (command == "bat demo off") { toggle_battery_demo(false); Serial.println("Demo disabled"); }
+    else if (command == "bat status") { print_battery_status(); }
+    else if (command == "bat charge on") { battery_set_charging(true); Serial.println("Charging: ON"); }
+    else if (command == "bat charge off") { battery_set_charging(false); Serial.println("Charging: OFF"); }
+    else if (command == "bat max17048") {
+        if (battery_state.max17048_available) {
+            uint8_t soc;
+            Serial.printf("MAX17048 SOC: %s\n", max17048_read_soc(soc) ? String(soc + "%").c_str() : "Error");
+        } else {
+            Serial.println("MAX17048 not available");
+        }
     }
-    else if (command == "bat demo off") {
-        toggle_battery_demo(false);
-        Serial.println("Battery demo disabled");
+    else if (command == "bat pins") {
+        Serial.printf("GPIO %d: %s, GPIO %d: %s\n", CHARGE_PIN,
+                     digitalRead(CHARGE_PIN) ? "HIGH" : "LOW", POWER_SWITCH_PIN,
+                     digitalRead(POWER_SWITCH_PIN) ? "HIGH" : "LOW");
     }
-    else if (command == "bat status") {
-        print_battery_status();
-    }
-    else if (command == "bat charge on") {
-        battery_set_charging(true);
-        Serial.println("Charging status: ON");
-    }
-    else if (command == "bat charge off") {
-        battery_set_charging(false);
-        Serial.println("Charging status: OFF");
-    }
-    else if (command == "bat debug") {
-        battery_debug_positions();
-    }
-    else if (command == "bat test") {
-        battery_test_animation();
-        Serial.println("Battery test animation executed");
-    }
-    else if (command == "bat help") {
-        Serial.println("=== Battery Commands ===");
-        Serial.println("  bat <0-100>     - Set battery level");
-        Serial.println("  bat demo on/off - Enable/disable demo animation");
-        Serial.println("  bat status      - Show battery status");
-        Serial.println("  bat charge on/off - Set charging status");
-        Serial.println("  bat debug       - Show battery debug info");
-        Serial.println("  bat test        - Run battery test animation");
-        Serial.println("  bat help        - Show battery commands");
+    else if (command == "bat state") {
+        const char* state_names[] = {"Normal", "Charging Animation", "Charging Overlay", "Demo", "Off Screen"};
+        Serial.printf("System State: %s\n", state_names[battery_state.system_state]);
     }
 }
 
