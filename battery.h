@@ -64,10 +64,15 @@ extern unsigned long last_battery_update, last_battery_animation;
 extern bool battery_demo_enabled, battery_animation_increasing;
 extern lv_obj_t *charging_overlay, *off_screen;
 
+
 // Timer + Widgets für Charging Screen
 static unsigned long charging_overlay_last_active = 0;
 static lv_obj_t *charging_label = nullptr;
 static lv_obj_t *charging_spinner = nullptr;
+
+// NEU: Backlight State Management für Charging Screen
+static bool charging_backlight_active = true;
+static bool charging_timer_started = false;
 
 // =============================================================================
 // FUNCTION DECLARATIONS
@@ -123,6 +128,18 @@ bool max17048_read_soc(uint8_t &soc) {
 bool read_charging_status_hw() { return (digitalRead(CHARGE_PIN) == LOW); }
 bool read_power_switch_status_hw() { return (digitalRead(POWER_SWITCH_PIN) == HIGH); }
 
+void charging_overlay_touch_event(lv_event_t *e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        Serial.println("[CHARGING] Touch detected - reactivating backlight");
+        
+        // Timer und Backlight neu starten
+        charging_overlay_last_active = millis();
+        charging_backlight_active = true;
+        
+        backlight_on();
+        lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
+    }
+}
 // Overlay Functions
 void create_charging_overlay() {
     charging_overlay = lv_obj_create(lv_scr_act());
@@ -151,12 +168,16 @@ void create_charging_overlay() {
     // Label in den Vordergrund
     lv_obj_move_foreground(charging_label);
 
-// Touch-Event → Overlay wieder aktivieren und Timer zurücksetzen
-    lv_obj_add_event_cb(charging_overlay, [](lv_event_t *e) {
-        charging_overlay_last_active = millis();  // Timer zurücksetzen bei Berührung
-        lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
+    // Touch-Event → Overlay wieder aktivieren und Timer zurücksetzen
+lv_obj_add_event_cb(charging_overlay, [](lv_event_t *e) {
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        Serial.println("[CHARGING] Touch detected - reactivating backlight");
+        charging_overlay_last_active = millis();
+        charging_backlight_active = true;
         backlight_on();
-    }, LV_EVENT_CLICKED, nullptr);
+        lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
+    }
+}, LV_EVENT_CLICKED, nullptr);
 }
 
 void create_off_screen() {
@@ -226,12 +247,30 @@ void backlight_off() {
     digitalWrite(GFX_BL, LOW);
 }
 
+void reset_charging_screen_state() {
+    charging_timer_started = false;
+    charging_backlight_active = true;
+    Serial.println("[CHARGING] State reset - backlight restored");
+}
+
+
 void show_charging_overlay() {
     if (charging_overlay) {
-        charging_overlay_last_active = millis();   // Timer zurücksetzen
+        // Timer nur beim allerersten Aufruf setzen
+        if (!charging_timer_started) {
+            charging_overlay_last_active = millis();
+            charging_backlight_active = true;
+            charging_timer_started = true;
+            Serial.printf("[CHARGING] Timer started at: %lu\n", charging_overlay_last_active);
+        }
+        
         lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(charging_overlay);
-        backlight_on();
+        
+        // Backlight nur einschalten wenn es aktiv sein soll
+        if (charging_backlight_active) {
+            backlight_on();
+        }
     }
 }
 
@@ -244,18 +283,19 @@ void update_charging_screen() {
     snprintf(buf, sizeof(buf), "%d%%", battery_get_level());
     lv_label_set_text(charging_label, buf);
 
-    unsigned long delta = millis() - charging_overlay_last_active;
-    Serial.println(millis());
-    // Timer prüfen → nach 10s Backlight OFF
-    if (delta > 10000) {
-        lv_obj_add_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
-        Serial.println("BK OFF");
-        backlight_off();
-    } else {
-        lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
-        Serial.println("BK ON");
-        backlight_on();
+    // Nur prüfen wenn Timer gestartet wurde und Backlight noch aktiv ist
+    if (charging_timer_started && charging_backlight_active) {
+        unsigned long delta = millis() - charging_overlay_last_active;
+        
+        if (delta > 10000) {
+            Serial.println("[CHARGING] 10s timeout - turning backlight OFF permanently");
+            backlight_off();
+            charging_backlight_active = false;
+        }
     }
+    
+    // Overlay bleibt immer sichtbar (nur Backlight geht aus)
+    lv_obj_clear_flag(charging_overlay, LV_OBJ_FLAG_HIDDEN);
 }
 
 
@@ -347,7 +387,9 @@ void battery_system_update() {
     // Handle states
     switch (battery_state.system_state) {
         case 0: // Normal operation
-            hide_charging_overlay(); hide_off_screen();
+            hide_charging_overlay();
+            hide_off_screen();
+            backlight_on();
             if (battery_state.max17048_available) {
                 uint8_t real_soc;
                 if (max17048_read_soc(real_soc)) {
@@ -361,7 +403,9 @@ void battery_system_update() {
             break;
             
         case 1: // Charging animation
-            hide_charging_overlay(); hide_off_screen();
+            hide_charging_overlay();
+            backlight_on();
+            hide_off_screen();
             if (current_time - last_battery_animation > 800) {
                 last_battery_animation = current_time;
                 uint8_t real_soc = battery_state.real_level;
@@ -382,7 +426,8 @@ void battery_system_update() {
             break;
             
         case 2: // Charging overlay
-            show_charging_overlay(); hide_off_screen();
+            show_charging_overlay(); 
+            hide_off_screen();
             update_charging_screen();
             if (battery_state.max17048_available) {
                 uint8_t real_soc;
@@ -394,7 +439,9 @@ void battery_system_update() {
             break;
             
         case 3: // Demo mode
-            hide_charging_overlay(); hide_off_screen();
+            hide_charging_overlay();
+            backlight_on();
+            hide_off_screen();
             if (battery_demo_enabled && (current_time - last_battery_animation > 2000)) {
                 last_battery_animation = current_time;
                 uint8_t current_level = battery_get_level();
@@ -411,7 +458,9 @@ void battery_system_update() {
             
         case 4: // Off screen
         default:
-            hide_charging_overlay(); show_off_screen();
+            reset_charging_screen_state();
+            hide_charging_overlay();
+            show_off_screen();
             if (battery_state.max17048_available) {
                 uint8_t real_soc;
                 if (max17048_read_soc(real_soc)) {
