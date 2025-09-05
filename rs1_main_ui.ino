@@ -106,15 +106,25 @@ void app_init() {
   settings_init();
   hardware_init();
   
-  // Battery system initialization
-  if (!LOADING_SCREEN_ENABLED) {
+  bool charging = (digitalRead(CHARGE_PIN) == LOW);
+  bool power_switch_on = (digitalRead(POWER_SWITCH_PIN) == HIGH);
+  
+  // Skip loading screen wenn im Charging-Modus ohne Schalter
+  if (charging && !power_switch_on) {
+    Serial.println("Device starting in charging mode - skipping loading screen");
     battery_init();
-    Serial.println("Battery system initialized");
+    change_state(STATE_MAIN); // Oder direkt zum Charging Screen
+    ui_init();
   } else {
-    Serial.println("Battery system init delayed until after loading");
+    // Normaler Startup mit Loading Screen
+    if (!LOADING_SCREEN_ENABLED) {
+      battery_init();
+      Serial.println("Battery system initialized");
+    } else {
+      Serial.println("Battery system init delayed until after loading");
+    }
+    ui_init();
   }
-
-  ui_init();
   bluetooth_init();
   
   Serial.println("=== Application Ready ===");
