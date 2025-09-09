@@ -1,6 +1,6 @@
 /*
 =============================================================================
-timer_system.h - Timer/T-Lapse/Interval System mit Servo und Elektro-Modus
+timer_system.h - Timer/T-Lapse/Interval System mit Servo + Elektro synchron
 =============================================================================
 */
 
@@ -12,11 +12,10 @@ timer_system.h - Timer/T-Lapse/Interval System mit Servo und Elektro-Modus
 #include "state_machine.h"
 
 // =============================================================================
-// ELEKTRO-MODUS CONFIGURATION - NEU
+// ELEKTRO-MODUS CONFIGURATION - VEREINFACHT
 // =============================================================================
-#define ELEKTRO_DETECTION_PIN   13    // LOW = Servo, HIGH = Elektro
 #define ELEKTRO_FOCUS_PIN       5     // Optokoppler 1 (Fokus)
-#define ELEKTRO_RELEASE_PIN     6    // Optokoppler 2 (Release) - GEÄNDERT von Pin 6
+#define ELEKTRO_RELEASE_PIN     6     // Optokoppler 2 (Release)
 
 // Elektro-Modus Einstellungen (konfigurierbar)
 extern float elektro_focus_lead_time;      // Vorlaufzeit vor Release (Sekunden)
@@ -24,13 +23,7 @@ extern float elektro_focus_duration;       // Dauer des Fokus-Signals (Sekunden)
 extern float elektro_release_duration;     // Dauer des Release-Signals für Trigger (Sekunden)
 
 // Elektro-Modus Status
-enum ElektroMode {
-  ELEKTRO_DISABLED,     // Servo-Modus
-  ELEKTRO_ENABLED       // Elektro-Modus
-};
-
 struct ElektroState {
-  ElektroMode mode;
   bool focus_active;
   bool release_active;
   unsigned long focus_start_time;
@@ -50,7 +43,7 @@ bool servo_initialization_complete = false;
 unsigned long servo_init_start_time = 0;
 #define SERVO_INIT_TIME_MS 500  // Time needed for servo to reach initial position
 
-// Timer States - ERWEITERT für Servo und Elektro-Completion
+// Timer States - ERWEITERT für Completion
 enum TimerExecutionMode {
   TIMER_EXEC_MODE,
   TLAPSE_EXEC_MODE,
@@ -63,16 +56,12 @@ enum TimerExecutionState {
   TIMER_RELEASE_RUNNING,
   TLAPSE_RUNNING,
   INTERVAL_RUNNING,
-  TIMER_COMPLETING_SERVO,    
-  TLAPSE_COMPLETING_SERVO,   
-  INTERVAL_COMPLETING_SERVO,
-  // NEU: Elektro-Completion-States
-  TIMER_COMPLETING_ELEKTRO,
-  TLAPSE_COMPLETING_ELEKTRO,
-  INTERVAL_COMPLETING_ELEKTRO
+  TIMER_COMPLETING,      // Vereinfacht - ein Completion-State für beide Systeme
+  TLAPSE_COMPLETING,   
+  INTERVAL_COMPLETING
 };
 
-// Timer Runtime Data - ERWEITERT
+// Timer Runtime Data
 struct TimerRuntime {
   TimerExecutionMode mode;
   TimerExecutionState state;
@@ -86,14 +75,10 @@ struct TimerRuntime {
   int intervalTime;       // for Interval in seconds
   float frameInterval;    // calculated interval between frames for T-Lapse
   
-  // Servo completion tracking
-  bool waiting_for_servo_completion;
-  unsigned long servo_completion_timeout;
-  bool logic_completed;   // Logic is done, but servo still moving
-  
-  // NEU: Elektro completion tracking
-  bool waiting_for_elektro_completion;
-  unsigned long elektro_completion_timeout;
+  // Completion tracking - vereinfacht
+  bool waiting_for_completion;
+  unsigned long completion_timeout;
+  bool logic_completed;   // Logic is done, but systems still active
 };
 
 // =============================================================================
@@ -110,9 +95,8 @@ extern float servoActivationTime;
 bool servo_is_activating = false;
 unsigned long servo_activation_start_time = 0;
 
-// Elektro-Modus Variablen - NEU
+// Elektro-Modus Variablen
 ElektroState elektro_state = {
-  ELEKTRO_DISABLED,
   false,
   false,
   0,
@@ -120,9 +104,9 @@ ElektroState elektro_state = {
   0
 };
 
-// Elektro-Modus Einstellungen - NEU (konfigurierbar)
-float elektro_focus_lead_time = 1.0;      // 1 Sekunde vor Release
-float elektro_focus_duration = 1.0;       // 1 Sekunde Fokus-Signal
+// Elektro-Modus Einstellungen (konfigurierbar)
+float elektro_focus_lead_time = 3.0;      // 1 Sekunde vor Release
+float elektro_focus_duration = 3.0;       // 1 Sekunde Fokus-Signal
 float elektro_release_duration = 0.6;     // 0.6 Sekunden Release für Trigger
 
 // UI Objects for Overlays
@@ -152,20 +136,25 @@ extern void send_ble_response(String response);
 void timer_system_init();
 void timer_system_update();
 
-// NEU: Elektro-Modus Functions
+// Elektro-Modus Functions - VEREINFACHT
 void elektro_system_init();
 void elektro_system_update();
-bool is_elektro_mode_enabled();
 void elektro_activate_focus();
 void elektro_activate_release();
 void elektro_deactivate_all();
-bool is_elektro_completion_needed();
+bool is_elektro_active();
 
 // Servo Control Functions
 void servo_init();
 void servo_activate();
 void servo_move_to_position(int position);
-bool is_servo_completion_needed();
+bool is_servo_active();
+
+// Combined Control Functions - NEU
+void activate_trigger();          // Aktiviert Servo UND Elektro synchron
+void activate_release_mode();     // Für Release-Modus
+void deactivate_all_systems();   // Deaktiviert alles
+bool is_any_system_active();     // Prüft ob noch was aktiv ist
 
 // Timer Execution Functions
 void start_timer_execution();
@@ -227,14 +216,13 @@ lv_obj_t *interval_overlay_frame_counter = nullptr;
 lv_obj_t *interval_overlay_cancel_btn = nullptr;
 
 // =============================================================================
-// ELEKTRO-MODUS IMPLEMENTATION - NEU
+// ELEKTRO-MODUS IMPLEMENTATION - VEREINFACHT
 // =============================================================================
 
 void elektro_system_init() {
   DEBUG_PRINTLN("Initializing elektro system...");
   
   // Configure pins
-  pinMode(ELEKTRO_DETECTION_PIN, INPUT_PULLUP);
   pinMode(ELEKTRO_FOCUS_PIN, OUTPUT);
   pinMode(ELEKTRO_RELEASE_PIN, OUTPUT);
   
@@ -242,7 +230,6 @@ void elektro_system_init() {
   digitalWrite(ELEKTRO_FOCUS_PIN, LOW);
   digitalWrite(ELEKTRO_RELEASE_PIN, LOW);
   
-  elektro_state.mode = ELEKTRO_DISABLED;
   elektro_state.focus_active = false;
   elektro_state.release_active = false;
   elektro_state.focus_start_time = 0;
@@ -252,24 +239,7 @@ void elektro_system_init() {
   DEBUG_PRINTLN("Elektro system initialized");
 }
 
-bool is_elektro_mode_enabled() {
-  bool detection = (digitalRead(ELEKTRO_DETECTION_PIN) == HIGH);
-  
-  if (detection && elektro_state.mode == ELEKTRO_DISABLED) {
-    elektro_state.mode = ELEKTRO_ENABLED;
-    DEBUG_PRINTLN("Switched to ELEKTRO mode");
-  } else if (!detection && elektro_state.mode == ELEKTRO_DISABLED) {
-    elektro_state.mode = ELEKTRO_DISABLED;
-    elektro_deactivate_all();
-    DEBUG_PRINTLN("Switched to SERVO mode");
-  }
-  
-  return (elektro_state.mode == ELEKTRO_ENABLED);
-}
-
 void elektro_activate_focus() {
-  if (!is_elektro_mode_enabled()) return;
-  
   digitalWrite(ELEKTRO_FOCUS_PIN, HIGH);
   elektro_state.focus_active = true;
   elektro_state.focus_start_time = millis();
@@ -278,8 +248,6 @@ void elektro_activate_focus() {
 }
 
 void elektro_activate_release() {
-  if (!is_elektro_mode_enabled()) return;
-  
   digitalWrite(ELEKTRO_RELEASE_PIN, HIGH);
   elektro_state.release_active = true;
   elektro_state.release_start_time = millis();
@@ -297,8 +265,6 @@ void elektro_deactivate_all() {
 }
 
 void elektro_system_update() {
-  if (!is_elektro_mode_enabled()) return;
-  
   unsigned long current_time = millis();
   
   // Update focus signal
@@ -330,7 +296,7 @@ void elektro_system_update() {
   }
 }
 
-bool is_elektro_completion_needed() {
+bool is_elektro_active() {
   return elektro_state.focus_active || elektro_state.release_active;
 }
 
@@ -381,24 +347,56 @@ void servo_update() {
   }
 }
 
-bool is_servo_completion_needed() {
-  return servo_is_activating || runtime.waiting_for_servo_completion;
+bool is_servo_active() {
+  return servo_is_activating;
 }
 
 // =============================================================================
-// TIMER SYSTEM FUNCTIONS - ERWEITERT
+// COMBINED CONTROL FUNCTIONS - NEU
+// =============================================================================
+
+void activate_trigger() {
+  // Aktiviert BEIDE Systeme synchron für Trigger-Modus
+  servo_activate();
+  elektro_activate_release();
+  
+  DEBUG_PRINTLN("COMBINED: Trigger activated (Servo + Elektro)");
+}
+
+void activate_release_mode() {
+  // Für Release-Modus: Servo auf Position + Elektro Release
+  servo_move_to_position(servoEndPosition);
+  elektro_activate_release();
+  
+  DEBUG_PRINTLN("COMBINED: Release mode activated (Servo + Elektro)");
+}
+
+void deactivate_all_systems() {
+  // Deaktiviert BEIDE Systeme
+  servo_move_to_position(servoStartPosition);
+  elektro_deactivate_all();
+  
+  DEBUG_PRINTLN("COMBINED: All systems deactivated");
+}
+
+bool is_any_system_active() {
+  return is_servo_active() || is_elektro_active();
+}
+
+// =============================================================================
+// TIMER SYSTEM FUNCTIONS - VEREINFACHT
 // =============================================================================
 void timer_system_init() {
   DEBUG_PRINTLN("Initializing timer system...");
   
   servo_init();
-  elektro_system_init();  // NEU
+  elektro_system_init();
   
   // Initialize servo tracking
   servo_initialization_complete = false;
   servo_init_start_time = 0;
   
-  // Initialize runtime data - ERWEITERT
+  // Initialize runtime data
   runtime.mode = TIMER_EXEC_MODE;
   runtime.state = TIMER_IDLE;
   runtime.startTime = 0;
@@ -411,14 +409,10 @@ void timer_system_init() {
   runtime.intervalTime = 0;
   runtime.frameInterval = 0.0;
   
-  // Servo completion tracking
-  runtime.waiting_for_servo_completion = false;
-  runtime.servo_completion_timeout = 0;
+  // Completion tracking - vereinfacht
+  runtime.waiting_for_completion = false;
+  runtime.completion_timeout = 0;
   runtime.logic_completed = false;
-  
-  // NEU: Elektro completion tracking
-  runtime.waiting_for_elektro_completion = false;
-  runtime.elektro_completion_timeout = 0;
   
   create_timer_overlays();
   
@@ -441,25 +435,22 @@ void timer_system_update() {
     return;
   }
   
-  // Update mode detection
-  is_elektro_mode_enabled();
-  
   // Update both systems
   elektro_system_update();
   servo_update();
   
   if (runtime.state == TIMER_IDLE) return;
   
-  // NEU: Handle elektro completion states
-  if (runtime.state == TIMER_COMPLETING_ELEKTRO || 
-      runtime.state == TLAPSE_COMPLETING_ELEKTRO || 
-      runtime.state == INTERVAL_COMPLETING_ELEKTRO) {
+  // Handle completion states - VEREINFACHT
+  if (runtime.state == TIMER_COMPLETING || 
+      runtime.state == TLAPSE_COMPLETING || 
+      runtime.state == INTERVAL_COMPLETING) {
     
-    // Check if elektro is done OR timeout reached
-    if (!is_elektro_completion_needed() || millis() > runtime.elektro_completion_timeout) {
-      DEBUG_PRINTLN("Elektro completion phase finished");
+    // Check if all systems are done OR timeout reached
+    if (!is_any_system_active() || millis() > runtime.completion_timeout) {
+      DEBUG_PRINTLN("Completion phase finished");
       runtime.state = TIMER_IDLE;
-      runtime.waiting_for_elektro_completion = false;
+      runtime.waiting_for_completion = false;
       runtime.logic_completed = false;
       hide_timer_overlays();
       show_current_page();
@@ -467,35 +458,6 @@ void timer_system_update() {
     }
     
     // Continue updating display during completion
-    switch (runtime.mode) {
-      case TIMER_EXEC_MODE:
-        update_timer_overlay_display();
-        break;
-      case TLAPSE_EXEC_MODE:
-        update_tlapse_overlay_display();
-        break;
-      case INTERVAL_EXEC_MODE:
-        update_interval_overlay_display();
-        break;
-    }
-    return;
-  }
-  
-  // Handle existing servo completion states
-  if (runtime.state == TIMER_COMPLETING_SERVO || 
-      runtime.state == TLAPSE_COMPLETING_SERVO || 
-      runtime.state == INTERVAL_COMPLETING_SERVO) {
-    
-    if (!servo_is_activating || millis() > runtime.servo_completion_timeout) {
-      DEBUG_PRINTLN("Servo completion phase finished");
-      runtime.state = TIMER_IDLE;
-      runtime.waiting_for_servo_completion = false;
-      runtime.logic_completed = false;
-      hide_timer_overlays();
-      show_current_page();
-      return;
-    }
-    
     switch (runtime.mode) {
       case TIMER_EXEC_MODE:
         update_timer_overlay_display();
@@ -562,11 +524,10 @@ void start_timer_execution() {
   show_timer_overlay();
   
   if (isTriggerMode) {
-    DEBUG_PRINTF("Timer started: Delay %ds, Mode: TRIGGER (Elektro: %s)\n", 
-                 runtime.totalDelayTime, is_elektro_mode_enabled() ? "YES" : "NO");
+    DEBUG_PRINTF("Timer started: Delay %ds, Mode: TRIGGER (Combined Servo+Elektro)\n", runtime.totalDelayTime);
   } else {
-    DEBUG_PRINTF("Timer started: Delay %ds, Release %ds (Elektro: %s)\n", 
-                 runtime.totalDelayTime, runtime.totalReleaseTime, is_elektro_mode_enabled() ? "YES" : "NO");
+    DEBUG_PRINTF("Timer started: Delay %ds, Release %ds (Combined Servo+Elektro)\n", 
+                 runtime.totalDelayTime, runtime.totalReleaseTime);
   }
 }
 
@@ -592,9 +553,8 @@ void start_tlapse_execution() {
   servo_move_to_position(servoStartPosition);
   show_tlapse_overlay();
   
-  DEBUG_PRINTF("T-Lapse started: %ds total, %d frames, %.2fs interval (Elektro: %s)\n", 
-               runtime.totalTime, runtime.totalFrames, runtime.frameInterval,
-               is_elektro_mode_enabled() ? "YES" : "NO");
+  DEBUG_PRINTF("T-Lapse started: %ds total, %d frames, %.2fs interval (Combined Servo+Elektro)\n", 
+               runtime.totalTime, runtime.totalFrames, runtime.frameInterval);
 }
 
 void start_interval_execution() {
@@ -612,8 +572,7 @@ void start_interval_execution() {
   servo_move_to_position(servoStartPosition);
   show_interval_overlay();
   
-  DEBUG_PRINTF("Interval started: %ds interval (Elektro: %s)\n", 
-               runtime.intervalTime, is_elektro_mode_enabled() ? "YES" : "NO");
+  DEBUG_PRINTF("Interval started: %ds interval (Combined Servo+Elektro)\n", runtime.intervalTime);
 }
 
 void cancel_timer_execution() {
@@ -621,19 +580,17 @@ void cancel_timer_execution() {
   
   runtime.state = TIMER_IDLE;
   runtime.frameCount = 0;
-  runtime.waiting_for_servo_completion = false;
-  runtime.waiting_for_elektro_completion = false;  // NEU
+  runtime.waiting_for_completion = false;
   runtime.logic_completed = false;
   
   // Deactivate both systems
-  servo_move_to_position(servoStartPosition);
-  elektro_deactivate_all();  // NEU
+  deactivate_all_systems();
   
   hide_timer_overlays();
 }
 
 // =============================================================================
-// TIMER UPDATE FUNCTIONS - ERWEITERT für Elektro-Modus
+// TIMER UPDATE FUNCTIONS - VEREINFACHT für synchrone Ansteuerung
 // =============================================================================
 void update_timer_execution() {
   unsigned long currentTime = millis();
@@ -642,63 +599,43 @@ void update_timer_execution() {
   
   switch (runtime.state) {
     case TIMER_DELAY_RUNNING: {
-      // NEU: Elektro-Modus Focus-Scheduling
-      if (is_elektro_mode_enabled()) {
-        // Berechne wann Focus starten soll
-        float time_to_release = runtime.totalDelayTime - elapsedPhase;
+      // Elektro-Focus-Scheduling für Timer-Modus
+      float time_to_release = runtime.totalDelayTime - elapsedPhase;
+      
+      // Fokus scheduling
+      if (time_to_release <= elektro_focus_lead_time && 
+          elektro_state.focus_scheduled_time == 0 && 
+          !elektro_state.focus_active) {
         
-        // Fokus scheduling - wichtige Logik für Vorlauf
-        if (time_to_release <= elektro_focus_lead_time && 
-            elektro_state.focus_scheduled_time == 0 && 
-            !elektro_state.focus_active) {
-          
-          // Spezialfall: Vorlaufzeit größer als verbleibendes Delay
-          if (elektro_focus_lead_time >= time_to_release) {
-            elektro_activate_focus();
-            DEBUG_PRINTF("Elektro: Focus activated immediately (lead time %.1fs >= remaining %.1fs)\n", 
-                        elektro_focus_lead_time, time_to_release);
-          } else {
-            elektro_state.focus_scheduled_time = currentTime + ((time_to_release - elektro_focus_lead_time) * 1000);
-            DEBUG_PRINTF("Elektro: Focus scheduled in %.1fs\n", time_to_release - elektro_focus_lead_time);
-          }
+        if (elektro_focus_lead_time >= time_to_release) {
+          elektro_activate_focus();
+          DEBUG_PRINTF("Elektro: Focus activated immediately (lead time %.1fs >= remaining %.1fs)\n", 
+                      elektro_focus_lead_time, time_to_release);
+        } else {
+          elektro_state.focus_scheduled_time = currentTime + ((time_to_release - elektro_focus_lead_time) * 1000);
+          DEBUG_PRINTF("Elektro: Focus scheduled in %.1fs\n", time_to_release - elektro_focus_lead_time);
         }
       }
       
       // Check if delay phase is complete
       if (elapsedPhase >= runtime.totalDelayTime) {
         if (runtime.totalReleaseTime == 0) {
-          // TRIGGER MODE
-          if (is_elektro_mode_enabled()) {
-            elektro_activate_release();
-            runtime.frameCount = 1;
-            runtime.logic_completed = true;
-            runtime.waiting_for_elektro_completion = true;
-            runtime.elektro_completion_timeout = millis() + (elektro_release_duration * 1000) + 500;
-            runtime.state = TIMER_COMPLETING_ELEKTRO;
-            DEBUG_PRINTLN("Timer: Delay complete, elektro triggered (Trigger mode)");
-          } else {
-            // Servo mode (unchanged)
-            servo_activate(); 
-            runtime.frameCount = 1;
-            runtime.logic_completed = true;
-            runtime.waiting_for_servo_completion = true;
-            runtime.servo_completion_timeout = millis() + (servoActivationTime * 1000) + 500;
-            runtime.state = TIMER_COMPLETING_SERVO;
-            DEBUG_PRINTLN("Timer: Delay complete, servo triggered (Trigger mode)");
-          }
+          // TRIGGER MODE - aktiviert beide Systeme
+          activate_trigger();
+          runtime.frameCount = 1;
+          runtime.logic_completed = true;
+          runtime.waiting_for_completion = true;
+          runtime.completion_timeout = millis() + max(servoActivationTime, elektro_release_duration) * 1000 + 500;
+          runtime.state = TIMER_COMPLETING;
+          DEBUG_PRINTLN("Timer: Delay complete, combined trigger activated");
         } else {
-          // RELEASE MODE
+          // RELEASE MODE - aktiviert beide Systeme für Release-Dauer
           runtime.state = TIMER_RELEASE_RUNNING;
           runtime.currentPhaseStartTime = millis();
           runtime.frameCount = 1;
           
-          if (is_elektro_mode_enabled()) {
-            elektro_activate_release();
-            DEBUG_PRINTF("Timer: Delay complete, elektro release ON for %ds\n", runtime.totalReleaseTime);
-          } else {
-            servo_move_to_position(servoEndPosition);
-            DEBUG_PRINTF("Timer: Delay complete, servo ON for %ds\n", runtime.totalReleaseTime);
-          }
+          activate_release_mode();
+          DEBUG_PRINTF("Timer: Delay complete, combined release ON for %ds\n", runtime.totalReleaseTime);
         }
       }
       break;
@@ -706,13 +643,8 @@ void update_timer_execution() {
       
     case TIMER_RELEASE_RUNNING: {
       if (elapsedPhase >= runtime.totalReleaseTime) {
-        if (is_elektro_mode_enabled()) {
-          elektro_deactivate_all();
-          DEBUG_PRINTLN("Timer execution complete - elektro deactivated");
-        } else {
-          servo_move_to_position(servoStartPosition);
-          DEBUG_PRINTLN("Timer execution complete - servo returned to start");
-        }
+        deactivate_all_systems();
+        DEBUG_PRINTLN("Timer execution complete - all systems deactivated");
         cancel_timer_execution();
         show_current_page();
         return;
@@ -732,15 +664,10 @@ void update_tlapse_execution() {
   
   // Trigger frame if needed
   if (expectedFrames > runtime.frameCount && runtime.frameCount < runtime.totalFrames) {
-    if (is_elektro_mode_enabled()) {
-      elektro_activate_release();
-    } else {
-      servo_activate();
-    }
+    activate_trigger();  // Aktiviert BEIDE Systeme
     runtime.frameCount++;
-    DEBUG_PRINTF("T-Lapse: Frame %d/%d triggered (mode: %s)\n", 
-                 runtime.frameCount, runtime.totalFrames, 
-                 is_elektro_mode_enabled() ? "ELEKTRO" : "SERVO");
+    DEBUG_PRINTF("T-Lapse: Frame %d/%d triggered (Combined Servo+Elektro)\n", 
+                 runtime.frameCount, runtime.totalFrames);
   }
   
   // Check if T-Lapse logic is complete
@@ -750,29 +677,15 @@ void update_tlapse_execution() {
     runtime.logic_completed = true;
     DEBUG_PRINTF("T-Lapse logic complete: %d frames taken\n", runtime.frameCount);
     
-    // Check completion based on mode
-    if (is_elektro_mode_enabled()) {
-      if (is_elektro_completion_needed()) {
-        runtime.waiting_for_elektro_completion = true;
-        runtime.elektro_completion_timeout = millis() + (elektro_release_duration * 1000) + 500;
-        runtime.state = TLAPSE_COMPLETING_ELEKTRO;
-        DEBUG_PRINTLN("T-Lapse waiting for final elektro completion");
-      } else {
-        cancel_timer_execution();
-        show_current_page();
-        return;
-      }
+    if (is_any_system_active()) {
+      runtime.waiting_for_completion = true;
+      runtime.completion_timeout = millis() + max(servoActivationTime, elektro_release_duration) * 1000 + 500;
+      runtime.state = TLAPSE_COMPLETING;
+      DEBUG_PRINTLN("T-Lapse waiting for final completion");
     } else {
-      if (is_servo_completion_needed()) {
-        runtime.waiting_for_servo_completion = true;
-        runtime.servo_completion_timeout = millis() + (servoActivationTime * 1000) + 500;
-        runtime.state = TLAPSE_COMPLETING_SERVO;
-        DEBUG_PRINTLN("T-Lapse waiting for final servo completion");
-      } else {
-        cancel_timer_execution();
-        show_current_page();
-        return;
-      }
+      cancel_timer_execution();
+      show_current_page();
+      return;
     }
   }
   
@@ -784,24 +697,18 @@ void update_interval_execution() {
   unsigned long elapsedPhase = (currentTime - runtime.currentPhaseStartTime) / 1000;
   
   if (elapsedPhase >= runtime.intervalTime) {
-    if (is_elektro_mode_enabled()) {
-      elektro_activate_release();
-    } else {
-      servo_activate();
-    }
+    activate_trigger();  // Aktiviert BEIDE Systeme
     runtime.frameCount++;
     runtime.currentPhaseStartTime = millis();
     
-    DEBUG_PRINTF("Interval: Frame %d triggered (mode: %s)\n", 
-                 runtime.frameCount, 
-                 is_elektro_mode_enabled() ? "ELEKTRO" : "SERVO");
+    DEBUG_PRINTF("Interval: Frame %d triggered (Combined Servo+Elektro)\n", runtime.frameCount);
   }
   
   update_interval_overlay_display();
 }
 
 // =============================================================================
-// OVERLAY FUNCTIONS - VOLLSTÄNDIG
+// OVERLAY FUNCTIONS - REST BLEIBT UNVERÄNDERT
 // =============================================================================
 void create_timer_overlays() {
   DEBUG_PRINTLN("Creating timer overlays...");
@@ -970,14 +877,14 @@ void hide_timer_overlays() {
 }
 
 // =============================================================================
-// OVERLAY UPDATE FUNCTIONS - ERWEITERT für Completion States
+// OVERLAY UPDATE FUNCTIONS - VEREINFACHT
 // =============================================================================
 void update_timer_overlay_display() {
   unsigned long currentTime = millis();
   unsigned long elapsedTotal = (currentTime - runtime.startTime) / 1000;
   unsigned long elapsedPhase = (currentTime - runtime.currentPhaseStartTime) / 1000;
   
-  if (runtime.state == TIMER_COMPLETING_SERVO || runtime.state == TIMER_COMPLETING_ELEKTRO) {
+  if (runtime.state == TIMER_COMPLETING) {
     // During completion - show completion message
     lv_label_set_text(timer_overlay_time_label, "SHOT");
     lv_obj_set_style_text_color(timer_overlay_time_label, lv_color_hex(COLOR_BTN_SUCCESS), 0);
@@ -1026,7 +933,6 @@ void update_tlapse_overlay_display() {
   unsigned long currentTime = millis();
   unsigned long elapsedTotal = (currentTime - runtime.startTime) / 1000;
   
-  // Normal display auch während Completion - keine visuellen Änderungen
   int minutes = elapsedTotal / 60;
   int seconds = elapsedTotal % 60;
   String timeStr = (minutes < 10 ? "0" : "") + String(minutes) + ":" + 
@@ -1040,7 +946,6 @@ void update_interval_overlay_display() {
   unsigned long currentTime = millis();
   unsigned long elapsedTotal = (currentTime - runtime.startTime) / 1000;
   
-  // Normal display auch während Completion - keine visuellen Änderungen
   int minutes = elapsedTotal / 60;
   int seconds = elapsedTotal % 60;
   String timeStr = (minutes < 10 ? "0" : "") + String(minutes) + ":" + 
