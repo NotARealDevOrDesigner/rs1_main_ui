@@ -123,21 +123,18 @@ void encoder_init() {
   // Use TWO03 mode for most common encoders (signals both LOW or HIGH in latch position)
   encoder = new RotaryEncoder(ENCODER_PIN_A, ENCODER_PIN_B, RotaryEncoder::LatchMode::TWO03);
   
-  // Configure button pin
-  pinMode(ENCODER_PIN_BUTTON, INPUT_PULLUP);
+  
   
   // NEW: Attach interrupts using library approach
   attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), check_encoder_position, CHANGE);
   attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_B), check_encoder_position, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_BUTTON), encoder_button_isr, FALLING);
   
   // Initialize variables
   last_encoder_position = 0;
   encoder_button_pressed = false;
   last_button_press = 0;
   
-  DEBUG_PRINTF("RotaryEncoder library initialized on pins A:%d, B:%d, BTN:%d\n", 
-               ENCODER_PIN_A, ENCODER_PIN_B, ENCODER_PIN_BUTTON);
+
 }
 
 void encoder_init_extended() {

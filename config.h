@@ -41,7 +41,6 @@ extern int servoAbsoluteMaxPosition;      // Runtime variable for absolute max
 // =============================================================================
 #define ENCODER_PIN_A         8      // Rotary encoder CLK pin (pin A)
 #define ENCODER_PIN_B         7      // Rotary encoder DT pin (pin B)  
-#define ENCODER_PIN_BUTTON    6      // Rotary encoder push button (optional)
 #define ENCODER_DEBOUNCE_MS   50     // Debounce time in milliseconds
 #define ENCODER_STEPS_PER_CLICK 1    // Steps per physical click (depends on encoder)
 
